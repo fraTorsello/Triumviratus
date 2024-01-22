@@ -1,5 +1,6 @@
 # ♘ Triumviratus ♘
 Welcome to Triumviratus, an adept UCI (Universal Chess Interface) chess engine that leverages bitboard representation and sophisticated algorithms such as alpha-beta pruning with Negamax, coupled with a quiescence search.
+<span style="color:red;">This text is red</span>
 
 The name "Triumviratus" is derived from the concept of a triumvirate, symbolizing a group of three individuals. In this context, it pays homage to the passion for chess that unites me and my two brothers (much like the classical concept of a triumvirate). As such, Triumviratus embodies the collaborative spirit and shared dedication of three minds harmoniously working together.
 Embark on a strategic journey with Triumviratus, where advanced chess engine programming meets the collaborative spirit of a triumvirate, bound by the shared love for the intricacies of the game. Explore the culmination of collective expertise and synchronized efforts that bring this chess engine to life.
