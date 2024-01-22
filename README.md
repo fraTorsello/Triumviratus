@@ -44,13 +44,13 @@ It's worth noting that certain aspects of the code, particularly the UCI (Univer
 - **Aspiration Window:**
   *Triumviratus* implements an aspiration window as a strategic tool in its search process. This optimization involves focusing the search on a narrow range of evaluation values, allowing the engine to explore variations within a specific target.
 
-## 🚀 Future Roadmap 
+# 🚀 Future Roadmap 
 *Triumviratus* is an evolving project with future updates planned to include the implementation of multithreading. This enhancement will enable the engine to harness the power of parallel processing, significantly improving its performance and speed.
 
-## 🎉 Contribute
+# 🎉 Contribute
 Contributions and feedback from the chess and open-source community are highly encouraged. Whether you are a chess enthusiast, developer, or both, your input is valuable in shaping the future of Triumviratus.
 
-## 🔧 Getting Started
+# 🔧 Getting Started
 To start using *Triumviratus*, you have two convenient options:
 
 -  **Compile from Visual Studio**
@@ -59,7 +59,7 @@ If you prefer to build the engine from source, follow the instructions in the pr
 - **Use the Precompiled Executable (.exe)**
 For a quick start, download the precompiled executable (.exe) from the releases section. This ready-to-use version allows you to run Triumviratus without the need for compilation. It's a hassle-free way to get started and experience the chess engine in action. Happy chess playing!
 
-## 📜 References:
+# 📜 References:
 
 ChessProgrammingWiki: [Wiki](https://www.chessprogramming.org/UCI)
 Code Monkey King's YouTube Channel: [Code Monkey King](https://www.youtube.com/channel/UClA-jNuyJKqN-xCm7KPG_XA)    
@@ -67,7 +67,7 @@ Code Monkey King's Chess Engine Series: [BCC Chess Engine](https://www.youtube.c
 Neural Network Architecture from David Miller: [NNUE](http://www.millermattson.com/dave/)    
 Vice Chess Engine by Bluefever: [VICE](https://github.com/bluefeversoft/vice)   
 
-## 🧪 Perft Test Results
+# 🧪 Perft Test Results
 
 Perft test results, single-core *Ryzen 7 6800H* processor running *Windows 11*. *(23/01/2024)*  
 
@@ -79,7 +79,7 @@ Perft test results, single-core *Ryzen 7 6800H* processor running *Windows 11*. 
 |   7   |3,195,901,860    |107,328   |
  
 
-## 🔎 Search results at Starting Position
+# 🔎 Search results at Starting Position
 
 Search results, single-core *Ryzen 7 6800H* processor running *Windows 11*. *(23/01/2024)*  
 
