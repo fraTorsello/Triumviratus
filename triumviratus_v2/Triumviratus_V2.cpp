@@ -3,11 +3,14 @@
 #include "uci.h"
 #include "tt.h"
 #include "presentation.h"
+#include "perft.h"
+#include "io.h"
 #include <thread>
 
 void present();
 void welcome_msg();
 void init_hash_nnue();
+void perft_test_start(int depth);
 
 int main()
 {
@@ -19,7 +22,8 @@ int main()
     init_hash_nnue();
     welcome_msg();
 
-    
+   // perft_test_start(6);
+   
     // connect to GUI
     uci_loop();
 
@@ -27,6 +31,12 @@ int main()
     free(hash_table);
 }
 
+void perft_test_start(int depth) {
+
+    parse_fen(start_position);
+    perft_test(depth);
+
+}
 
 void welcome_msg() {
 

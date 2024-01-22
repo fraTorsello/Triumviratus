@@ -6,6 +6,8 @@
 #include "misc.h"
 #include "evaluation.h"
 #include "perft.h"
+#include <algorithm> 
+#include <numeric>
 
 const int full_depth_moves = 4;
 
@@ -92,26 +94,7 @@ static inline int score_move(int move)
             }
         }
 
-        /* extract move features
-        int source_square = get_move_source(move);
-        int target_square = get_move_target(move);
-
-        // make the first capture, so that X-ray defender show up
-        pop_bit(bitboards[piece], source_square);
-
-        // captures of undefended pieces are good by definition
-        if (!is_square_attacked(target_square, side ^ 1)) {
-            // restore captured piece
-            set_bit(bitboards[piece], source_square);
-
-            // score undefended captures greater than other captures
-            return 15000;
-        }
-
-        // restore captured piece
-        set_bit(bitboards[piece], source_square);*/
-
-        // score move by MVV LVA lookup [source piece][target piece]
+    
         return mvv_lva[piece][target_piece] + 10000;
     }
 
@@ -153,8 +136,11 @@ static inline int sort_moves(moves* move_list, int best_move)
             move_scores[count] = score_move(move_list->moves[count]);
     }
 
+    // sort only the top half of the moves
+    int half_count = move_list->count;
+
     // loop over current move within a move list
-    for (int current_move = 0; current_move < move_list->count; current_move++)
+    for (int current_move = 0; current_move < half_count; current_move++)
     {
         // loop over next move within a move list
         for (int next_move = current_move + 1; next_move < move_list->count; next_move++)

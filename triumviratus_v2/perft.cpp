@@ -43,7 +43,7 @@
 // perft test
 void perft_test(int depth)
 {
-    printf("\n     Performance test\n\n");
+    printf("\nPerformance test\n\n");
 
     // create move list instance
     moves move_list[1];
@@ -53,7 +53,7 @@ void perft_test(int depth)
 
     // init start time
     long start = get_time_ms();
-
+    //printf("Starting time:  %d\n", start);
     // loop over generated moves
     for (int move_count = 0; move_count < move_list->count; move_count++)
     {
@@ -67,7 +67,7 @@ void perft_test(int depth)
 
         // cummulative nodes
         long cummulative_nodes = nodes;
-
+      
         // call perft driver recursively
         perft_driver(depth - 1);
 
@@ -78,7 +78,7 @@ void perft_test(int depth)
         take_back();
 
         // print move
-        printf("     move: %s%s%c  nodes: %ld\n", square_to_coordinates[get_move_source(move_list->moves[move_count])],
+        printf("move: %s%s%c  nodes: %ld\n", square_to_coordinates[get_move_source(move_list->moves[move_count])],
             square_to_coordinates[get_move_target(move_list->moves[move_count])],
             get_move_promoted(move_list->moves[move_count]) ? mapPieceToPromotion(get_move_promoted(move_list->moves[move_count])) : ' ',
             old_nodes);
