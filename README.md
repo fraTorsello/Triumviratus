@@ -66,12 +66,13 @@ Neural Network Architecture from David Miller: [NNUE](http://www.millermattson.c
 
 Perft test results on a single-core Ryzen 7 6800H processor running Windows 11. *(23/01/2024)*  
 
-**| Depth | Nodes         | Time   |**   
-  |-------|---------------|--------|   
-  | 4     | 197,281       | 16     |    
-  | 5     | 4,865,609     | 156    |    
-  | 6     | 119,060,324   | 3,766  |    
-  | 7     | 3,195,901,860 | 107,328|   
+| Depth | Nodes           | Time     |
+|:-----:|:---------------:|:--------:|
+|   4   |     197,281     |    16    |
+|   5   |   4,865,609     |   156    |
+|   6   | 119,060,324     | 3,766    |
+|   7   |3,195,901,860    |107,328   |
+ 
 
 ## 🔎 Search results at Starting Position
 
