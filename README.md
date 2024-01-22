@@ -60,8 +60,37 @@ For a quick start, download the precompiled executable (.exe) from the releases 
 
 Code Monkey King's YouTube Channel: [Code Monkey King](https://www.youtube.com/channel/UClA-jNuyJKqN-xCm7KPG_XA)
 Code Monkey King's Chess Engine Series: [BCC Chess Engine](https://www.youtube.com/channel/UCB9-prLkPwgvlKKqDgXhsMQ)
-Neural Network Architecture from David Miller: [NNUE](http://www.millermattson.com/dave/)
+Neural Network Architecture from David Miller: [NNUE](http://www.millermattson.com/dave/) 
 
+## 🧪 Perft Test Results
 
+Perft test results on a single-core Ryzen 7 6800H processor running Windows 11. *(23/01/2024)*
+
+**| Depth | Nodes         | Time   |**
+  |-------|---------------|--------|
+  | 4     | 197,281       | 16     |
+  | 5     | 4,865,609     | 156    |
+  | 6     | 119,060,324   | 3,766  |
+  | 7     | 3,195,901,860 | 107,328|
+
+## 🔎 Search results at Starting Position
+
+Search results on a single-core Ryzen 7 6800H processor running Windows 11. *(23/01/2024)*
+
+  **Depth 1**: Move d2d4, Time x
+  **Depth 2**: Move d2d4 d7d5, Time 0
+  **Depth 3**: Move d2d4 d7d5 g1f3, Time 0
+  **Depth 4**: Move d2d4 g8f6 c2c4 c7c5, Time 0
+  **Depth 5**: Move d2d4 d7d5 c2c4 d5c4 g1f3, Time 0
+  **Depth 6**: Move d2d4 d7d5 c2c4 d5c4 g1f3 g8f6, Time 15
+  **Depth 7**: Move d2d4 d7d5 c2c4 e7e6 g1f3 g8f6 b1c3, Time 31
+  **Depth 8**: Move d2d4 g8f6 c2c4 c7c6 b1c3 d7d5 c4d5 c6d5, Time 94
+  **Depth 9**: Move d2d4 g8f6 c2c4 e7e6 b1c3 d7d5 g1f3 b8d7 e2e3, Time 156
+  **Depth 10**: Move d2d4 g8f6 c2c4 e7e6 b1c3 d7d5 c1g5 d5c4 e2e3 c7c5, Time 390
+  **Depth 11**: Move d2d4 g8f6 c2c4 e7e6 g1f3 d7d5 b1c3 c7c6 e2e3 f8e7 d1c2, Time 781
+  **Depth 12**: Move d2d4 g8f6 c2c4 e7e6 g1f3 d7d5 b1c3 c7c6 e2e3 f8e7 f1d3 d5c4, Time 1750
+  **Depth 13**: Move d2d4 g8f6 c2c4 e7e6 g1f3 d7d5 b1c3 c7c6 e2e3 f8e7 f1d3 d5c4 d3c4, Time 5000
+  **Best Move**: d2d4
+  
 
 
