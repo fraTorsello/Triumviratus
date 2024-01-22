@@ -6,7 +6,7 @@ Embark on a strategic journey with *Triumviratus*, where advanced chess engine p
 
 ## 🌱 Inspiration and Roots
 *Triumviratus* draws significant inspiration from Codemonkeyking's YouTube video series, offering a comprehensive exploration of the development of his BCC Chess Engine. The invaluable lessons and techniques distilled from this series have played a pivotal role in cultivating a profound understanding of the fundamental aspects of chess engine programming. Additionally, the fundamentals of chess engine programming have been further enriched through the examination of the development of "Vice" by Bluefever Software and their accompanying YouTube video series. The insights gained from studying "Vice" have provided valuable perspectives, contributing to the refinement and enhancement of Triumviratus.
-
+Special thanks to Chessprogramming Wiki for providing clear and insightful explanations that have greatly assisted in understanding various aspects of chess engines development.
 It's worth noting that certain aspects of the code, particularly the UCI (Universal Chess Interface) communication part and the implementation of *get_time_ms()*, have been forked from the codebase of **Vice**. This collaborative approach not only acknowledges the influence of Bluefever Software's work but also highlights the cooperative nature of chess engine development, where ideas and implementations are shared and built upon within the community.
 
 # 📈 Project Status
@@ -59,6 +59,7 @@ For a quick start, download the precompiled executable (.exe) from the releases 
 
 ## 📜 References:
 
+ChessProgrammingWiki: [Wiki](https://www.chessprogramming.org/UCI)
 Code Monkey King's YouTube Channel: [Code Monkey King](https://www.youtube.com/channel/UClA-jNuyJKqN-xCm7KPG_XA)    
 Code Monkey King's Chess Engine Series: [BCC Chess Engine](https://www.youtube.com/channel/UCB9-prLkPwgvlKKqDgXhsMQ)     
 Neural Network Architecture from David Miller: [NNUE](http://www.millermattson.com/dave/)    
@@ -66,7 +67,7 @@ Vice Chess Engine by Bluefever: [VICE](https://github.com/bluefeversoft/vice)
 
 ## 🧪 Perft Test Results
 
-Perft test results on a single-core *Ryzen 7 6800H* processor running *Windows 11*. *(23/01/2024)*  
+Perft test results, single-core *Ryzen 7 6800H* processor running *Windows 11*. *(23/01/2024)*  
 
 | Depth | Nodes           | Time     |
 |:-----:|:---------------:|:--------:|
@@ -78,7 +79,7 @@ Perft test results on a single-core *Ryzen 7 6800H* processor running *Windows 1
 
 ## 🔎 Search results at Starting Position
 
-Search results on a single-core *Ryzen 7 6800H* processor running *Windows 11*. *(23/01/2024)*  
+Search results, single-core *Ryzen 7 6800H* processor running *Windows 11*. *(23/01/2024)*  
 
 | Depth | Moves                                           | Time |
 |:-----:|:-----------------------------------------------:|:----:|
@@ -97,5 +98,9 @@ Search results on a single-core *Ryzen 7 6800H* processor running *Windows 11*. 
 |  13   | Move d2d4 g8f6 c2c4 e7e6 g1f3 d7d5 b1c3 c7c6 e2e3 f8e7 f1d3 d5c4 d3c4, Time 5000 |  5000  |
 | Best  |                            Move d2d4                |      |
 
+
+# 🗨️ UCI usage and documentation
+
+The usage and documentation for the UCI (Universal Chess Interface) can be found on the official website [UCI](https://www.wbec-ridderkerk.nl/html/UCIProtocol.html), providing comprehensive information on how to implement and utilize this standardized protocol for communication between chess engines and graphical user interfaces.
 
 
