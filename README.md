@@ -6,7 +6,9 @@ Embark on a strategic journey with *Triumviratus*, where advanced chess engine p
 
 ## 🌱 Inspiration and Roots
 *Triumviratus* draws significant inspiration from Codemonkeyking's YouTube video series, offering a comprehensive exploration of the development of his BCC Chess Engine. The invaluable lessons and techniques distilled from this series have played a pivotal role in cultivating a profound understanding of the fundamental aspects of chess engine programming. Additionally, the fundamentals of chess engine programming have been further enriched through the examination of the development of "Vice" by Bluefever Software and their accompanying YouTube video series. The insights gained from studying "Vice" have provided valuable perspectives, contributing to the refinement and enhancement of Triumviratus.
+
 Special thanks to Chessprogramming Wiki for providing clear and insightful explanations that have greatly assisted in understanding various aspects of chess engines development.
+
 It's worth noting that certain aspects of the code, particularly the UCI (Universal Chess Interface) communication part and the implementation of *get_time_ms()*, have been forked from the codebase of **Vice**. This collaborative approach not only acknowledges the influence of Bluefever Software's work but also highlights the cooperative nature of chess engine development, where ideas and implementations are shared and built upon within the community.
 
 # 📈 Project Status
