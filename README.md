@@ -8,7 +8,7 @@ Embark on a strategic journey with Triumviratus, where advanced chess engine pro
 Triumviratus draws significant inspiration from Codemonkeyking's YouTube video series, providing an in-depth exploration of the development of his BCC Chess Engine. The lessons and techniques distilled from this series have played a pivotal role in fostering a profound understanding of the fundamental aspects of chess engine programming.
 
 
-# Key Features
+# Key Features ⭐
 ### Bitboard Representation:
 Harnessing the efficiency and speed of bitboards for chess board representation, Triumviratus adopts a cutting-edge approach to optimize both move generation and evaluation processes, achieving unparalleled performance in the realm of chess engines.
 Bitboards, a compact and highly efficient data structure, empower Triumviratus to analyze chess positions with speed. Each chess piece type, as well as important game state information, is encoded using a set of bits, allowing for rapid operations. 
@@ -40,7 +40,7 @@ Triumviratus enhances search efficiency by implementing a transposition table. T
 ### Aspiration Window:
 Triumviratus implements an aspiration window as a strategic tool in its search process. This optimization involves focusing the search on a narrow range of evaluation values, allowing the engine to explore variations within a specific target.
 
-## Future Roadmap
+## Future Roadmap 🚀
 Triumviratus is an evolving project with future updates planned to include the implementation of multithreading. This enhancement will enable the engine to harness the power of parallel processing, significantly improving its performance and speed.
 
 ## Contribute
