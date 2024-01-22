@@ -10,36 +10,35 @@ Embark on a strategic journey with *Triumviratus*, where advanced chess engine p
 # 📈 Project Status
 
 ## 🔑 Key Features 
-#### Bitboard Representation:
-Harnessing the efficiency and speed of bitboards for chess board representation, *Triumviratus* adopts a cutting-edge approach to optimize both move generation and evaluation processes, achieving unparalleled performance in the realm of chess engines.
-Bitboards, a compact and highly efficient data structure, empower Triumviratus to analyze chess positions with speed. Each chess piece type, as well as important game state information, is encoded using a set of bits, allowing for rapid operations. 
+- **Bitboard Representation:**
+  Harnessing the efficiency and speed of bitboards for chess board representation, *Triumviratus* adopts a cutting-edge approach to optimize both move generation and evaluation processes, achieving unparalleled performance in the realm of chess engines. Bitboards, a compact and highly efficient data structure, empower Triumviratus to analyze chess positions with speed. Each chess piece type, as well as important game state information, is encoded using a set of bits, allowing for rapid operations.
 
-#### ✔️ Alpha-Beta Pruning with Negamax:
-*Triumviratus* strategically utilizes the alpha-beta pruning algorithm, seamlessly integrated with the Negamax search algorithm. This synergistic combination enhances the engine's capacity to efficiently explore and evaluate potential moves, resulting in a significant boost to strategic decision-making.
+- **Alpha-Beta Pruning with Negamax:**
+  *Triumviratus* strategically utilizes the alpha-beta pruning algorithm, seamlessly integrated with the Negamax search algorithm. This synergistic combination enhances the engine's capacity to efficiently explore and evaluate potential moves, resulting in a significant boost to strategic decision-making.
 
-#### ✔️ Quiescence Search:
-*Triumviratus* ensures precise move selection through its quiescence search, a strategic exploration of variations in positions where the game state is relatively quiet. This approach not only leads to more reliable and robust gameplay but is also instrumental in mitigating the horizon effect.
+- **Quiescence Search:**
+  *Triumviratus* ensures precise move selection through its quiescence search, a strategic exploration of variations in positions where the game state is relatively quiet. This approach not only leads to more reliable and robust gameplay but is also instrumental in mitigating the horizon effect.
 
-#### ✔️ NNUE for Position Evaluation:
-*Triumviratus* ventures beyond conventional methods by integrating NNUE (Efficiently Updatable Neural Network) for position evaluation, a cutting-edge technology that imparts a layer of sophistication to the engine's ability to assess and understand the complexities of chess positions. This state-of-the-art approach, akin to that employed by Stockfish, significantly refines Triumviratus' strategic prowess and elevates its overall performance in the dynamic landscape of chess.
+- **NNUE for Position Evaluation:**
+  *Triumviratus* ventures beyond conventional methods by integrating NNUE (Efficiently Updatable Neural Network) for position evaluation, a cutting-edge technology that imparts a layer of sophistication to the engine's ability to assess and understand the complexities of chess positions. This state-of-the-art approach, akin to that employed by Stockfish, significantly refines Triumviratus' strategic prowess and elevates its overall performance in the dynamic landscape of chess.
 
-#### ✔️ Move Ordering:
-Implementing move ordering techniques to enhance the efficiency of the search algorithm and prioritize the most promising moves early in the search.
+- **Move Ordering:**
+  Implementing move ordering techniques to enhance the efficiency of the search algorithm and prioritize the most promising moves early in the search.
 
-#### ✔️ PV Table (Principal Variation Table):
-*Triumviratus* strategically employs a Principal Variation (PV) table to store and retrieve principal variations, enhancing the efficiency of its search algorithm by preventing redundant evaluations of the same position. This sophisticated mechanism ensures that the engine optimally navigates through the vast chess search space, avoiding unnecessary recalculations and contributing to faster and more streamlined decision-making.
+- **PV Table (Principal Variation Table):**
+  *Triumviratus* strategically employs a Principal Variation (PV) table to store and retrieve principal variations, enhancing the efficiency of its search algorithm by preventing redundant evaluations of the same position. This sophisticated mechanism ensures that the engine optimally navigates through the vast chess search space, avoiding unnecessary recalculations and contributing to faster and more streamlined decision-making.
 
-#### ✔️ Null Move Pruning:
-*Triumviratus* incorporates null move pruning as a strategic optimization in its search process. This technique expedites the search by efficiently identifying positions where making no move leads to a favorable outcome. By temporarily simulating a scenario where the side to move skips a turn, Triumviratus efficiently prunes branches of the search tree where such a null move does not lead to a significant disadvantage. This approach aids in accelerating the overall search process, enabling the engine to focus on more promising lines of play and improving its computational efficiency.
+- **Null Move Pruning:**
+  *Triumviratus* incorporates null move pruning as a strategic optimization in its search process. This technique expedites the search by efficiently identifying positions where making no move leads to a favorable outcome. By temporarily simulating a scenario where the side to move skips a turn, Triumviratus efficiently prunes branches of the search tree where such a null move does not lead to a significant disadvantage. This approach aids in accelerating the overall search process, enabling the engine to focus on more promising lines of play and improving its computational efficiency.
 
-#### ✔️ Late Move Reduction:
-*Triumviratus* employs late move reduction as a strategic enhancement in its search algorithm. This optimization involves reducing the search depth for less promising moves late in the search process. By intelligently scaling back the exploration of certain branches, Triumviratus streamlines its search, allocating more computational resources to promising lines of play. This approach contributes to a more efficient search, allowing the engine to prioritize the analysis of potentially impactful moves and enhancing its overall decision-making capabilities.
+- **Late Move Reduction:**
+  *Triumviratus* employs late move reduction as a strategic enhancement in its search algorithm. This optimization involves reducing the search depth for less promising moves late in the search process. By intelligently scaling back the exploration of certain branches, Triumviratus streamlines its search, allocating more computational resources to promising lines of play. This approach contributes to a more efficient search, allowing the engine to prioritize the analysis of potentially impactful moves and enhancing its overall decision-making capabilities.
 
-#### ✔️ Transposition Table with Zobrist Hashing:
-*Triumviratus* enhances search efficiency by implementing a transposition table. This table stores previously evaluated positions utilizing Zobrist hashing, a technique that minimizes redundancy in evaluations. Zobrist hashing assigns unique keys to chess positions, allowing Triumviratus to quickly identify and retrieve information from the transposition table. By avoiding redundant evaluations of positions, this approach significantly improves overall performance, making the engine more adept at navigating complex chess scenarios with greater speed and precision.
+- **Transposition Table with Zobrist Hashing:**
+  *Triumviratus* enhances search efficiency by implementing a transposition table. This table stores previously evaluated positions utilizing Zobrist hashing, a technique that minimizes redundancy in evaluations. Zobrist hashing assigns unique keys to chess positions, allowing Triumviratus to quickly identify and retrieve information from the transposition table. By avoiding redundant evaluations of positions, this approach significantly improves overall performance, making the engine more adept at navigating complex chess scenarios with greater speed and precision.
 
-#### ✔️ Aspiration Window:
-*Triumviratus* implements an aspiration window as a strategic tool in its search process. This optimization involves focusing the search on a narrow range of evaluation values, allowing the engine to explore variations within a specific target.
+- **Aspiration Window:**
+  *Triumviratus* implements an aspiration window as a strategic tool in its search process. This optimization involves focusing the search on a narrow range of evaluation values, allowing the engine to explore variations within a specific target.
 
 ## 🚀 Future Roadmap 
 *Triumviratus* is an evolving project with future updates planned to include the implementation of multithreading. This enhancement will enable the engine to harness the power of parallel processing, significantly improving its performance and speed.
