@@ -6,7 +6,6 @@ Embark on a strategic journey with Triumviratus, where advanced chess engine pro
 
 ## Inspiration and Roots
 Triumviratus draws significant inspiration from Codemonkeyking's YouTube video series, providing an in-depth exploration of the development of his BCC Chess Engine. The lessons and techniques distilled from this series have played a pivotal role in fostering a profound understanding of the fundamental aspects of chess engine programming.
-<span style="color:red;">This text is red</span>
 
 # Key Features 🔑
 ### Bitboard Representation:
