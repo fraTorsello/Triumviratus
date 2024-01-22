@@ -79,7 +79,7 @@ Search results on a single-core *Ryzen 7 6800H* processor running *Windows 11*. 
 
 | Depth | Moves                                           | Time |
 |:-----:|:-----------------------------------------------:|:----:|
-|   1   |                      Move d2d4, Time x           |   x  |
+|   1   |                      Move d2d4, Time 0           |   0  |
 |   2   |               Move d2d4 d7d5, Time 0               |   0  |
 |   3   |         Move d2d4 d7d5 g1f3, Time 0               |   0  |
 |   4   |      Move d2d4 g8f6 c2c4 c7c5, Time 0            |   0  |
