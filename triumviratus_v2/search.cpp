@@ -6,10 +6,9 @@
 #include "misc.h"
 #include "evaluation.h"
 #include "perft.h"
-#include "tinycthread.h"
-// full depth moves counter
+
 const int full_depth_moves = 4;
-thrd_t worker_threads[64];
+
 
 // depth limit to consider reduction
 const int reduction_limit = 3;

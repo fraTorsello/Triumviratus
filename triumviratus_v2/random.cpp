@@ -2,15 +2,6 @@
 #include "magic.h"
 #include <cstdlib>
 
-
-/**********************************\
- ==================================
-
-           Random numbers
-
- ==================================
-\**********************************/
-
 // pseudo random number state
 unsigned int random_state = 1804289383;
 

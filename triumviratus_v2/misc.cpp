@@ -1,12 +1,3 @@
-/**********************************\
- ==================================
-
-       Miscellaneous functions
-          forked from VICE
-         by Richard Allbert
-
- ==================================
-\**********************************/
 #include "Windows.h"
 #include <io.h>
 #include <fcntl.h>
