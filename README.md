@@ -1,8 +1,8 @@
-  _____     _                      ____    ___  
- |_   _| __(_)_   _ _ __ _____   _|___ \  / _ \ 
-   | || '__| | | | | '_ ` _ \ \ / / __) || | | |
-   | || |  | | |_| | | | | | \ V / / __/ | |_| |
-   |_||_|  |_|\__,_|_| |_| |_|\_/ |_____(_)___/ 
+  _____     _                      ____    ___       
+ |_   _| __(_)_   _ _ __ _____   _|___ \  / _ \      
+   | || '__| | | | | '_ ` _ \ \ / / __) || | | |    
+   | || |  | | |_| | | | | | \ V / / __/ | |_| |   
+   |_||_|  |_|\__,_|_| |_| |_|\_/ |_____(_)___/    
                                                 
 # ♔ **Triumviratus** ♔
 Welcome to Triumviratus, an adept UCI (Universal Chess Interface) chess engine that leverages bitboard representation and sophisticated algorithms such as alpha-beta pruning with Negamax, coupled with a quiescence search.
