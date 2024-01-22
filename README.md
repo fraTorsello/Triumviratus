@@ -59,10 +59,10 @@ For a quick start, download the precompiled executable (.exe) from the releases 
 
 ## 📜 References:
 
-Code Monkey King's YouTube Channel: [Code Monkey King](https://www.youtube.com/channel/UClA-jNuyJKqN-xCm7KPG_XA)
-Code Monkey King's Chess Engine Series: [BCC Chess Engine](https://www.youtube.com/channel/UCB9-prLkPwgvlKKqDgXhsMQ)
-Neural Network Architecture from David Miller: [NNUE](http://www.millermattson.com/dave/) 
-Vice Chess Engine by Bluefever: [VICE](https://github.com/bluefeversoft/vice)
+Code Monkey King's YouTube Channel: [Code Monkey King](https://www.youtube.com/channel/UClA-jNuyJKqN-xCm7KPG_XA)    
+Code Monkey King's Chess Engine Series: [BCC Chess Engine](https://www.youtube.com/channel/UCB9-prLkPwgvlKKqDgXhsMQ)     
+Neural Network Architecture from David Miller: [NNUE](http://www.millermattson.com/dave/)    
+Vice Chess Engine by Bluefever: [VICE](https://github.com/bluefeversoft/vice)   
 
 ## 🧪 Perft Test Results
 
