@@ -4,7 +4,7 @@
 
 
 # ♔ **Triumviratus** ♔
-*Triumviratus 2.0* is a sophisticated UCI chess engine that employs advanced techniques, including bitboard representation and powerful algorithms such as alpha-beta pruning with Negamax, complemented by a quiescence search. The engine has evolved from its previous version, Triumviratus 1.0, which drew inspiration from "*Vice" by Bluefever*. Notably, version 1.0 lacked the bitboard representation that is now a key feature in the upgraded *Triumviratus 2.0*, enhancing its overall efficiency and capabilities in chess analysis and gameplay.
+*Triumviratus 2.0* is a sophisticated UCI chess engine that employs advanced techniques, including bitboard representation and powerful algorithms such as alpha-beta pruning with Negamax, complemented by a quiescence search. The engine has evolved from its previous version, *Triumviratus 1.0*, which drew inspiration from "*Vice" by Bluefever*. Notably, version 1.0 lacked the bitboard representation that is now a key feature in the upgraded *Triumviratus 2.0*, enhancing its overall efficiency and capabilities in chess analysis and gameplay.
 
 The name *"Triumviratus"* is derived from the concept of a triumvirate, symbolizing a group of three individuals. In this context, it pays homage to the passion for chess that unites me and my two brothers (much like the classical concept of a triumvirate). As such, *Triumviratus* embodies the collaborative spirit and shared dedication of three minds harmoniously working together.
 Embark on a strategic journey with *Triumviratus*, where advanced chess engine programming meets the collaborative spirit of a triumvirate, bound by the shared love for the intricacies of the game. Explore the culmination of collective expertise and synchronized efforts that bring this chess engine to life.
@@ -48,6 +48,10 @@ It's worth noting that certain aspects of the code, particularly the UCI (Univer
 
 - **Aspiration Window:**
   *Triumviratus* implements an aspiration window as a strategic tool in its search process. This optimization involves focusing the search on a narrow range of evaluation values, allowing the engine to explore variations within a specific target.
+
+## 🪄 Magic Bitboard Move Generation:
+
+Triumviratus incorporates magic bitboards into its move generation process, enhancing the efficiency of move generation. Magic bitboards are a sophisticated technique that involves using precomputed "magic" numbers to efficiently generate sliding piece moves (such as those of bishops and rooks) on a chess board. By leveraging this approach, Triumviratus accelerates the generation of legal moves, contributing to an overall improvement in the engine's speed and responsiveness during the search process. This optimized move generation allows the engine to explore a broader range of candidate moves within the available time frame, enhancing its decision-making capabilities and tactical awareness.
 
 # 🚀 Future Roadmap 
 *Triumviratus* is an evolving project with future updates planned to include the implementation of multithreading. This enhancement will enable the engine to harness the power of parallel processing, significantly improving its performance and speed.
