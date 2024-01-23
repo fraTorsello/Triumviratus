@@ -9,7 +9,7 @@
 The name *"Triumviratus"* is derived from the concept of a triumvirate, symbolizing a group of three individuals. In this context, it pays homage to the passion for chess that unites me and my two brothers (much like the classical concept of a triumvirate). As such, *Triumviratus* embodies the collaborative spirit and shared dedication of three minds harmoniously working together.
 Embark on a strategic journey with *Triumviratus*, where advanced chess engine programming meets the collaborative spirit of a triumvirate, bound by the shared love for the intricacies of the game. Explore the culmination of collective expertise and synchronized efforts that bring this chess engine to life.
 
-# 💪🏻 Play Strength
+# 💪🏻 Playing Strength
 As of January 2024, Triumviratus 2.0 continues to demonstrate its remarkable strength by consistently defeating bots rated approximately 2800 on Chess.Com with a few seconds of deliberation. This exceptional capability positions Triumviratus 2.0 as a formidable and challenging opponent for any human player. Its strategic acumen and rapid decision-making make it a worthy adversary in the realm of chess, providing an engaging and competitive experience for those seeking to test their skills against advanced artificial intelligence.  
 
 Currently, in January 2024, Triumviratus 2.0 has achieved the impressive feat of defeating all Magnus Carlsen bots featured on Chess.com. Notably, one of these bots boasts a rating that should be of 2900 at least, further highlighting Triumviratus 2.0's capabilities.
