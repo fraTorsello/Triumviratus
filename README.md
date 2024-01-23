@@ -1,4 +1,4 @@
-<div style="text-align:center;">
+<div style="margin:auto; width:50%;">
   <img src="/TRIUMVIRATUS.png" alt="Triumviratus Logo" width="350" height="350">
 </div>
 
