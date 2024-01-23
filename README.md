@@ -88,27 +88,42 @@ Perft test results, single-core *Ryzen 7 6800H* processor running *Windows 11*. 
 |   7   |3,195,901,860    |107,328   |
  
 
-# 🔎 Search results at Starting Position
+# 🔎 Search results at Test Positions
 
 Search results, single-core *Ryzen 7 6800H* processor running *Windows 11*. *(23/01/2024)*  
+Positions: [Test](https://www.chessprogramming.org/The_Nolot_Suite)
 
-| Depth | Moves                                           | Time |
-|:-----:|:-----------------------------------------------:|:----:|
-|   1   |                      Move d2d4, Time 0           |   0  |
-|   2   |               Move d2d4 d7d5, Time 0               |   0  |
-|   3   |         Move d2d4 d7d5 g1f3, Time 0               |   0  |
-|   4   |      Move d2d4 g8f6 c2c4 c7c5, Time 0            |   0  |
-|   5   |  Move d2d4 d7d5 c2c4 d5c4 g1f3, Time 0            |   0  |
-|   6   |  Move d2d4 d7d5 c2c4 d5c4 g1f3 g8f6, Time 15     |  15  |
-|   7   | Move d2d4 d7d5 c2c4 e7e6 g1f3 g8f6 b1c3, Time 31 |  31  |
-|   8   | Move d2d4 g8f6 c2c4 c7c6 b1c3 d7d5 c4d5 c6d5, Time 94 |  94  |
-|   9   | Move d2d4 g8f6 c2c4 e7e6 b1c3 d7d5 g1f3 b8d7 e2e3, Time 156 |  156  |
-|  10   | Move d2d4 g8f6 c2c4 e7e6 b1c3 d7d5 c1g5 d5c4 e2e3 c7c5, Time 390 |  390  |
-|  11   | Move d2d4 g8f6 c2c4 e7e6 g1f3 d7d5 b1c3 c7c6 e2e3 f8e7 d1c2, Time 781 |  781  |
-|  12   | Move d2d4 g8f6 c2c4 e7e6 g1f3 d7d5 b1c3 c7c6 e2e3 f8e7 f1d3 d5c4, Time 1750 |  1750  |
-|  13   | Move d2d4 g8f6 c2c4 e7e6 g1f3 d7d5 b1c3 c7c6 e2e3 f8e7 f1d3 d5c4 d3c4, Time 5000 |  5000  |
-| Best  |                            Move d2d4                |      |
+**Pos 1**:   r3qb1k/1b4p1/p2pr2p/3n4/Pnp1N1N1/6RP/1B3PP1/1B1QR1K1 w - -    *bm Nxh6*  
 
+| Depth | Moves                                             | Time |
+|:-----:|:-------------------------------------------------:|:----:|
+|   1   | Move a4a5, Time 0                                 |   0  |
+|   2   | Move g4h6 b4d3 b1d3, Time 0                       |   0  |
+|   3   | Move g4h6 b4d3 b1d3 c4d3, Time 0                  |   0  |
+|   6   | Move b2a1 c4c3 g4h6 d5f4 a1c3 b7e4, Time 31       |  31  |
+|   8   | Move g4h6 b4d3 h6f5 d3b2 d1d4 d5f6 e4f6 e6e1, Time 250 |  250  |
+|  10   | Move g4h6 c4c3 b2a1 c3c2 b1c2 b4c2 d1c2 e6h6 c2b1 e8f7, Time 969 |  969  |
+|  12   | Move g4h6 c4c3 b2a1 c3c2 d1g4 e6e7 b1c2 b4c2 h6f5 c2e1 f5e7 e8e7, Time 3484 |  3484  |
+
+**Best Move:**   
+- Move: d2d4  
+
+**Pos 3**: r2qk2r/ppp1b1pp/2n1p3/3pP1n1/3P2b1/2PB1NN1/PP4PP/R1BQK2R w KQkq - *bm Nxg5*    
+
+| Depth | Moves                                             | Time |
+|:-----:|:-------------------------------------------------:|:----:|
+|   1   | Move c1e3, Time 0                                 |   0  |
+|   2   | Move e1g1 g5f3, Time 0                             |   0  |
+|   4   | Move c1g5 e7g5 h2h3 g5f4, Time 0                   |   0  |
+|   5   | Move c1g5 e7g5 h2h3 g5f4 e1g1, Time 0              |   0  |
+|   6   | Move c1g5 e7g5 h2h3 g4f3 d1f3 d8e7, Time 16       |  16  |
+|   8   | Move c1g5 e7g5 h2h3 g4f3 d1f3 d8e7 f3h5 e8d7 e1g1, Time 31 |  31  |
+|  10   | Move c1g5 e7g5 e1g1 d8d7 h2h3 g4f3 d1f3 e8c8 g3h5 h7h6, Time 469 |  469  |
+|  12   | Move f3g5 g4d1 g5e6 d8b8 e6g7 e8d8 e1d1 h8f8 d3h7 a7a5 g3f5 d8d7 h7g6, Time 1875 |  1875  |
+|  14   | Move f3g5 g4d1 g5e6 d8c8 e6g7 e8f7 d3f5 c8b8 c1h6 e7f8 e5e6 f7f6 e1g1 f8g7 f5d3 f6e6 h6g7, Time 6172 |  6172  |
+
+**Best Move:**    
+- Move: f3g5  
 
 # 🗨️ UCI usage and documentation
 
