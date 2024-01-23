@@ -93,7 +93,8 @@ Perft test results, single-core *Ryzen 7 6800H* processor running *Windows 11*. 
 Search results, single-core *Ryzen 7 6800H* processor running *Windows 11*. *(23/01/2024)*  
 Positions: [Test](https://www.chessprogramming.org/The_Nolot_Suite)
 
-**Pos 1**:   r3qb1k/1b4p1/p2pr2p/3n4/Pnp1N1N1/6RP/1B3PP1/1B1QR1K1 w - -    *bm Nxh6*  
+### **Pos 1**:    
+r3qb1k/1b4p1/p2pr2p/3n4/Pnp1N1N1/6RP/1B3PP1/1B1QR1K1 w - -    *bm Nxh6*  
 
 | Depth | Moves                                             | Time |
 |:-----:|:-------------------------------------------------:|:----:|
@@ -108,7 +109,9 @@ Positions: [Test](https://www.chessprogramming.org/The_Nolot_Suite)
 **Best Move:**   
 - Move: d2d4  
 
-**Pos 3**: r2qk2r/ppp1b1pp/2n1p3/3pP1n1/3P2b1/2PB1NN1/PP4PP/R1BQK2R w KQkq - *bm Nxg5*    
+
+### **Pos 3**:  
+r2qk2r/ppp1b1pp/2n1p3/3pP1n1/3P2b1/2PB1NN1/PP4PP/R1BQK2R w KQkq - *bm Nxg5*    
 
 | Depth | Moves                                             | Time |
 |:-----:|:-------------------------------------------------:|:----:|
