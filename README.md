@@ -1,7 +1,6 @@
-<div style="margin:auto; width:50%;">
+<div style="display:flex; justify-content:center;">
   <img src="/TRIUMVIRATUS.png" alt="Triumviratus Logo" width="350" height="350">
 </div>
-
 
 # ♔ **Triumviratus** ♔
 Triumviratus 2.0 is a sophisticated UCI chess engine that employs advanced techniques, including bitboard representation and powerful algorithms such as alpha-beta pruning with Negamax, complemented by a quiescence search. The engine has evolved from its previous version, Triumviratus 1.0, which drew inspiration from "Vice" by bluefever. Notably, version 1.0 lacked the bitboard representation that is now a key feature in the upgraded Triumviratus 2.0, enhancing its overall efficiency and capabilities in chess analysis and gameplay.
