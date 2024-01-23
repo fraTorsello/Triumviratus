@@ -70,7 +70,7 @@ For a quick start, download the precompiled executable (.exe) from the releases 
 
 # 📜 References:
 
-ChessProgrammingWiki: [Wiki](https://www.chessprogramming.org/UCI)
+ChessProgrammingWiki: [Wiki](https://www.chessprogramming.org/UCI)    
 Code Monkey King's YouTube Channel: [Code Monkey King](https://www.youtube.com/channel/UClA-jNuyJKqN-xCm7KPG_XA)    
 Code Monkey King's Chess Engine Series: [BCC Chess Engine](https://www.youtube.com/channel/UCB9-prLkPwgvlKKqDgXhsMQ)     
 Neural Network Architecture from David Miller: [NNUE](http://www.millermattson.com/dave/)    
