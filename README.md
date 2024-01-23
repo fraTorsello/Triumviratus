@@ -67,10 +67,10 @@ Contributions and feedback from the chess and open-source community are highly e
 # 🔧 Getting Started
 To start using *Triumviratus*, you have two convenient options:
 
--  **Compile from Visual Studio**
+-  **Compile from Visual Studio**   
 If you prefer to build the engine from source, follow the instructions in the provided Visual Studio project. Ensure you have the necessary dependencies installed, open the project in Visual Studio, and compile the code to generate the executable. This option gives you the flexibility to customize and modify Triumviratus according to your preferences.
 
-- **Use the Precompiled Executable (.exe)**
+- **Use the Precompiled Executable (.exe)**    
 For a quick start, download the precompiled executable (.exe) from the releases section. This ready-to-use version allows you to run Triumviratus without the need for compilation. It's a hassle-free way to get started and experience the chess engine in action. Happy chess playing!
 
 # 📜 References:
