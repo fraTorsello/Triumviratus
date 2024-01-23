@@ -135,6 +135,6 @@ r2qk2r/ppp1b1pp/2n1p3/3pP1n1/3P2b1/2PB1NN1/PP4PP/R1BQK2R w KQkq - *bm Nxg5*
 
 # 🗨️ UCI usage and documentation
 
-The usage and documentation for the UCI (Universal Chess Interface) can be found on the official website [UCI](https://www.wbec-ridderkerk.nl/html/UCIProtocol.html), providing comprehensive information on how to implement and utilize this standardized protocol for communication between chess engines and graphical user interfaces.
+The usage and documentation for the UCI (Universal Chess Interface) can be found on this website [UCI](https://www.wbec-ridderkerk.nl/html/UCIProtocol.html), providing comprehensive information on how to implement and utilize this standardized protocol for communication between chess engines and graphical user interfaces.
 
 
