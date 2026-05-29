@@ -1,0 +1,2 @@
+*.nnue filter=lfs diff=lfs merge=lfs -text
+triumviratus_policy.bin filter=lfs diff=lfs merge=lfs -text

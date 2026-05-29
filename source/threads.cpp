@@ -32,6 +32,7 @@
 #include "defs.h"
 
 #include "policy_bridge.h"
+#include "syzygy.h"
 
  // ============================================================================
  // GLOBALS
@@ -432,10 +433,17 @@ static inline void td_unmake_move(ThreadData& td, int move, UndoInfo& undo) {
 // MOVE GENERATION
 // ============================================================================
 
-static void td_generate_moves(ThreadData& td, moves* move_list) {
+static void td_generate_moves(ThreadData& td, moves* move_list, bool captures_only = false) {
     move_list->count = 0;
     int source_square, target_square;
     U64 bitboard, attacks;
+
+    // --- MAGIA BITWISE: Precalcoliamo le maschere ---
+    U64 enemies = (td.side == white) ? td.occupancies[black] : td.occupancies[white];
+    U64 friends = (td.side == white) ? td.occupancies[white] : td.occupancies[black];
+    // Se vogliamo solo catture, le uniche case valide sono quelle nemiche. 
+    // Altrimenti, tutte le case tranne le nostre.
+    U64 allowed_squares = captures_only ? enemies : ~friends;
 
     for (int piece = P; piece <= k; piece++) {
         bitboard = td.bitboards[piece];
@@ -445,20 +453,26 @@ static void td_generate_moves(ThreadData& td, moves* move_list) {
                 while (bitboard) {
                     source_square = get_ls1b_index(bitboard);
                     target_square = source_square - 8;
-                    if (!(target_square < a8) && !get_bit(td.occupancies[both], target_square)) {
-                        if (source_square >= a7 && source_square <= h7) {
-                            add_move(move_list, encode_move(source_square, target_square, piece, Q, 0, 0, 0, 0));
-                            add_move(move_list, encode_move(source_square, target_square, piece, R, 0, 0, 0, 0));
-                            add_move(move_list, encode_move(source_square, target_square, piece, B, 0, 0, 0, 0));
-                            add_move(move_list, encode_move(source_square, target_square, piece, N, 0, 0, 0, 0));
-                        }
-                        else {
-                            add_move(move_list, encode_move(source_square, target_square, piece, 0, 0, 0, 0, 0));
-                            if ((source_square >= a2 && source_square <= h2) && !get_bit(td.occupancies[both], target_square - 8))
-                                add_move(move_list, encode_move(source_square, target_square - 8, piece, 0, 0, 1, 0, 0));
+
+                    // Mosse silenziose dei pedoni: bloccate se captures_only � true
+                    if (!captures_only) {
+                        if (!(target_square < a8) && !get_bit(td.occupancies[both], target_square)) {
+                            if (source_square >= a7 && source_square <= h7) {
+                                add_move(move_list, encode_move(source_square, target_square, piece, Q, 0, 0, 0, 0));
+                                add_move(move_list, encode_move(source_square, target_square, piece, R, 0, 0, 0, 0));
+                                add_move(move_list, encode_move(source_square, target_square, piece, B, 0, 0, 0, 0));
+                                add_move(move_list, encode_move(source_square, target_square, piece, N, 0, 0, 0, 0));
+                            }
+                            else {
+                                add_move(move_list, encode_move(source_square, target_square, piece, 0, 0, 0, 0, 0));
+                                if ((source_square >= a2 && source_square <= h2) && !get_bit(td.occupancies[both], target_square - 8))
+                                    add_move(move_list, encode_move(source_square, target_square - 8, piece, 0, 0, 1, 0, 0));
+                            }
                         }
                     }
-                    attacks = pawn_attacks[td.side][source_square] & td.occupancies[black];
+
+                    // Catture dei pedoni
+                    attacks = pawn_attacks[td.side][source_square] & enemies;
                     while (attacks) {
                         target_square = get_ls1b_index(attacks);
                         if (source_square >= a7 && source_square <= h7) {
@@ -472,6 +486,8 @@ static void td_generate_moves(ThreadData& td, moves* move_list) {
                         }
                         pop_bit(attacks, target_square);
                     }
+
+                    // En passant (� sempre una cattura, lo generiamo sempre)
                     if (td.enpassant != no_sq) {
                         U64 enpassant_attacks = pawn_attacks[td.side][source_square] & (1ULL << td.enpassant);
                         if (enpassant_attacks) {
@@ -483,16 +499,19 @@ static void td_generate_moves(ThreadData& td, moves* move_list) {
                 }
             }
             if (piece == K) {
-                if (td.castle & wk) {
-                    if (!get_bit(td.occupancies[both], f1) && !get_bit(td.occupancies[both], g1)) {
-                        if (!td_is_square_attacked(td, e1, black) && !td_is_square_attacked(td, f1, black))
-                            add_move(move_list, encode_move(e1, g1, piece, 0, 0, 0, 0, 1));
+                // Arrocco: bloccato se captures_only � true
+                if (!captures_only) {
+                    if (td.castle & wk) {
+                        if (!get_bit(td.occupancies[both], f1) && !get_bit(td.occupancies[both], g1)) {
+                            if (!td_is_square_attacked(td, e1, black) && !td_is_square_attacked(td, f1, black))
+                                add_move(move_list, encode_move(e1, g1, piece, 0, 0, 0, 0, 1));
+                        }
                     }
-                }
-                if (td.castle & wq) {
-                    if (!get_bit(td.occupancies[both], d1) && !get_bit(td.occupancies[both], c1) && !get_bit(td.occupancies[both], b1)) {
-                        if (!td_is_square_attacked(td, e1, black) && !td_is_square_attacked(td, d1, black))
-                            add_move(move_list, encode_move(e1, c1, piece, 0, 0, 0, 0, 1));
+                    if (td.castle & wq) {
+                        if (!get_bit(td.occupancies[both], d1) && !get_bit(td.occupancies[both], c1) && !get_bit(td.occupancies[both], b1)) {
+                            if (!td_is_square_attacked(td, e1, black) && !td_is_square_attacked(td, d1, black))
+                                add_move(move_list, encode_move(e1, c1, piece, 0, 0, 0, 0, 1));
+                        }
                     }
                 }
             }
@@ -502,20 +521,24 @@ static void td_generate_moves(ThreadData& td, moves* move_list) {
                 while (bitboard) {
                     source_square = get_ls1b_index(bitboard);
                     target_square = source_square + 8;
-                    if (!(target_square > h1) && !get_bit(td.occupancies[both], target_square)) {
-                        if (source_square >= a2 && source_square <= h2) {
-                            add_move(move_list, encode_move(source_square, target_square, piece, q, 0, 0, 0, 0));
-                            add_move(move_list, encode_move(source_square, target_square, piece, r, 0, 0, 0, 0));
-                            add_move(move_list, encode_move(source_square, target_square, piece, b, 0, 0, 0, 0));
-                            add_move(move_list, encode_move(source_square, target_square, piece, n, 0, 0, 0, 0));
-                        }
-                        else {
-                            add_move(move_list, encode_move(source_square, target_square, piece, 0, 0, 0, 0, 0));
-                            if ((source_square >= a7 && source_square <= h7) && !get_bit(td.occupancies[both], target_square + 8))
-                                add_move(move_list, encode_move(source_square, target_square + 8, piece, 0, 0, 1, 0, 0));
+
+                    if (!captures_only) {
+                        if (!(target_square > h1) && !get_bit(td.occupancies[both], target_square)) {
+                            if (source_square >= a2 && source_square <= h2) {
+                                add_move(move_list, encode_move(source_square, target_square, piece, q, 0, 0, 0, 0));
+                                add_move(move_list, encode_move(source_square, target_square, piece, r, 0, 0, 0, 0));
+                                add_move(move_list, encode_move(source_square, target_square, piece, b, 0, 0, 0, 0));
+                                add_move(move_list, encode_move(source_square, target_square, piece, n, 0, 0, 0, 0));
+                            }
+                            else {
+                                add_move(move_list, encode_move(source_square, target_square, piece, 0, 0, 0, 0, 0));
+                                if ((source_square >= a7 && source_square <= h7) && !get_bit(td.occupancies[both], target_square + 8))
+                                    add_move(move_list, encode_move(source_square, target_square + 8, piece, 0, 0, 1, 0, 0));
+                            }
                         }
                     }
-                    attacks = pawn_attacks[td.side][source_square] & td.occupancies[white];
+
+                    attacks = pawn_attacks[td.side][source_square] & enemies;
                     while (attacks) {
                         target_square = get_ls1b_index(attacks);
                         if (source_square >= a2 && source_square <= h2) {
@@ -540,31 +563,32 @@ static void td_generate_moves(ThreadData& td, moves* move_list) {
                 }
             }
             if (piece == k) {
-                if (td.castle & bk) {
-                    if (!get_bit(td.occupancies[both], f8) && !get_bit(td.occupancies[both], g8)) {
-                        if (!td_is_square_attacked(td, e8, white) && !td_is_square_attacked(td, f8, white))
-                            add_move(move_list, encode_move(e8, g8, piece, 0, 0, 0, 0, 1));
+                if (!captures_only) {
+                    if (td.castle & bk) {
+                        if (!get_bit(td.occupancies[both], f8) && !get_bit(td.occupancies[both], g8)) {
+                            if (!td_is_square_attacked(td, e8, white) && !td_is_square_attacked(td, f8, white))
+                                add_move(move_list, encode_move(e8, g8, piece, 0, 0, 0, 0, 1));
+                        }
                     }
-                }
-                if (td.castle & bq) {
-                    if (!get_bit(td.occupancies[both], d8) && !get_bit(td.occupancies[both], c8) && !get_bit(td.occupancies[both], b8)) {
-                        if (!td_is_square_attacked(td, e8, white) && !td_is_square_attacked(td, d8, white))
-                            add_move(move_list, encode_move(e8, c8, piece, 0, 0, 0, 0, 1));
+                    if (td.castle & bq) {
+                        if (!get_bit(td.occupancies[both], d8) && !get_bit(td.occupancies[both], c8) && !get_bit(td.occupancies[both], b8)) {
+                            if (!td_is_square_attacked(td, e8, white) && !td_is_square_attacked(td, d8, white))
+                                add_move(move_list, encode_move(e8, c8, piece, 0, 0, 0, 0, 1));
+                        }
                     }
                 }
             }
         }
 
+        // --- PEZZI (Qui applichiamo la maschera allowed_squares) ---
         if ((td.side == white) ? piece == N : piece == n) {
             while (bitboard) {
                 source_square = get_ls1b_index(bitboard);
-                attacks = knight_attacks[source_square] & ((td.side == white) ? ~td.occupancies[white] : ~td.occupancies[black]);
+                attacks = knight_attacks[source_square] & allowed_squares;
                 while (attacks) {
                     target_square = get_ls1b_index(attacks);
-                    if (!get_bit(((td.side == white) ? td.occupancies[black] : td.occupancies[white]), target_square))
-                        add_move(move_list, encode_move(source_square, target_square, piece, 0, 0, 0, 0, 0));
-                    else
-                        add_move(move_list, encode_move(source_square, target_square, piece, 0, 1, 0, 0, 0));
+                    if (!get_bit(enemies, target_square)) add_move(move_list, encode_move(source_square, target_square, piece, 0, 0, 0, 0, 0));
+                    else add_move(move_list, encode_move(source_square, target_square, piece, 0, 1, 0, 0, 0));
                     pop_bit(attacks, target_square);
                 }
                 pop_bit(bitboard, source_square);
@@ -574,13 +598,11 @@ static void td_generate_moves(ThreadData& td, moves* move_list) {
         if ((td.side == white) ? piece == B : piece == b) {
             while (bitboard) {
                 source_square = get_ls1b_index(bitboard);
-                attacks = get_bishop_attacks(source_square, td.occupancies[both]) & ((td.side == white) ? ~td.occupancies[white] : ~td.occupancies[black]);
+                attacks = get_bishop_attacks(source_square, td.occupancies[both]) & allowed_squares;
                 while (attacks) {
                     target_square = get_ls1b_index(attacks);
-                    if (!get_bit(((td.side == white) ? td.occupancies[black] : td.occupancies[white]), target_square))
-                        add_move(move_list, encode_move(source_square, target_square, piece, 0, 0, 0, 0, 0));
-                    else
-                        add_move(move_list, encode_move(source_square, target_square, piece, 0, 1, 0, 0, 0));
+                    if (!get_bit(enemies, target_square)) add_move(move_list, encode_move(source_square, target_square, piece, 0, 0, 0, 0, 0));
+                    else add_move(move_list, encode_move(source_square, target_square, piece, 0, 1, 0, 0, 0));
                     pop_bit(attacks, target_square);
                 }
                 pop_bit(bitboard, source_square);
@@ -590,13 +612,11 @@ static void td_generate_moves(ThreadData& td, moves* move_list) {
         if ((td.side == white) ? piece == R : piece == r) {
             while (bitboard) {
                 source_square = get_ls1b_index(bitboard);
-                attacks = get_rook_attacks(source_square, td.occupancies[both]) & ((td.side == white) ? ~td.occupancies[white] : ~td.occupancies[black]);
+                attacks = get_rook_attacks(source_square, td.occupancies[both]) & allowed_squares;
                 while (attacks) {
                     target_square = get_ls1b_index(attacks);
-                    if (!get_bit(((td.side == white) ? td.occupancies[black] : td.occupancies[white]), target_square))
-                        add_move(move_list, encode_move(source_square, target_square, piece, 0, 0, 0, 0, 0));
-                    else
-                        add_move(move_list, encode_move(source_square, target_square, piece, 0, 1, 0, 0, 0));
+                    if (!get_bit(enemies, target_square)) add_move(move_list, encode_move(source_square, target_square, piece, 0, 0, 0, 0, 0));
+                    else add_move(move_list, encode_move(source_square, target_square, piece, 0, 1, 0, 0, 0));
                     pop_bit(attacks, target_square);
                 }
                 pop_bit(bitboard, source_square);
@@ -606,13 +626,11 @@ static void td_generate_moves(ThreadData& td, moves* move_list) {
         if ((td.side == white) ? piece == Q : piece == q) {
             while (bitboard) {
                 source_square = get_ls1b_index(bitboard);
-                attacks = get_queen_attacks(source_square, td.occupancies[both]) & ((td.side == white) ? ~td.occupancies[white] : ~td.occupancies[black]);
+                attacks = get_queen_attacks(source_square, td.occupancies[both]) & allowed_squares;
                 while (attacks) {
                     target_square = get_ls1b_index(attacks);
-                    if (!get_bit(((td.side == white) ? td.occupancies[black] : td.occupancies[white]), target_square))
-                        add_move(move_list, encode_move(source_square, target_square, piece, 0, 0, 0, 0, 0));
-                    else
-                        add_move(move_list, encode_move(source_square, target_square, piece, 0, 1, 0, 0, 0));
+                    if (!get_bit(enemies, target_square)) add_move(move_list, encode_move(source_square, target_square, piece, 0, 0, 0, 0, 0));
+                    else add_move(move_list, encode_move(source_square, target_square, piece, 0, 1, 0, 0, 0));
                     pop_bit(attacks, target_square);
                 }
                 pop_bit(bitboard, source_square);
@@ -622,13 +640,11 @@ static void td_generate_moves(ThreadData& td, moves* move_list) {
         if ((td.side == white) ? piece == K : piece == k) {
             while (bitboard) {
                 source_square = get_ls1b_index(bitboard);
-                attacks = king_attacks[source_square] & ((td.side == white) ? ~td.occupancies[white] : ~td.occupancies[black]);
+                attacks = king_attacks[source_square] & allowed_squares;
                 while (attacks) {
                     target_square = get_ls1b_index(attacks);
-                    if (!get_bit(((td.side == white) ? td.occupancies[black] : td.occupancies[white]), target_square))
-                        add_move(move_list, encode_move(source_square, target_square, piece, 0, 0, 0, 0, 0));
-                    else
-                        add_move(move_list, encode_move(source_square, target_square, piece, 0, 1, 0, 0, 0));
+                    if (!get_bit(enemies, target_square)) add_move(move_list, encode_move(source_square, target_square, piece, 0, 0, 0, 0, 0));
+                    else add_move(move_list, encode_move(source_square, target_square, piece, 0, 1, 0, 0, 0));
                     pop_bit(attacks, target_square);
                 }
                 pop_bit(bitboard, source_square);
@@ -787,6 +803,10 @@ static inline int td_score_move(ThreadData& td, int move, int tt_move) {
 static inline void td_sort_moves(ThreadData& td, moves* move_list, int tt_move, float* policy_scores = nullptr, bool policy_used = false) {
     int scores[256];
 
+    // Codifica indici policy CANONICA sul lato che muove (deve combaciare con
+    // evaluate_policy / chess_encoding.py): Bianco -> (sq ^ 56), Nero -> sq.
+    const bool wtm = (td.side == white);
+
     for (int i = 0; i < move_list->count; i++) {
         int move = move_list->moves[i];
 
@@ -795,7 +815,10 @@ static inline void td_sort_moves(ThreadData& td, moves* move_list, int tt_move, 
 
         // Se la Policy   attiva e la mossa   tranquilla, aggiungiamo il super-potere!
         if (policy_used && policy_scores != nullptr && !get_move_capture(move) && move != tt_move) {
-            int p_idx = (get_move_source(move) ^ 56) * 64 + (get_move_target(move) ^ 56);
+            int src = get_move_source(move), tgt = get_move_target(move);
+            int cs = wtm ? (src ^ 56) : src;
+            int ct = wtm ? (tgt ^ 56) : tgt;
+            int p_idx = cs * 64 + ct;
             // Peso ridotto (era *500, tarato sulla VECCHIA rete col pooling).
             // La rete nuova ha logit ~[-8,+11]: *50 rende il bonus una spinta
             // che asseconda la history senza dominarla.
@@ -821,6 +844,25 @@ static inline void td_sort_moves(ThreadData& td, moves* move_list, int tt_move, 
         }
     }
 }
+
+// Nuova funzione che calcola solo gli score ma NON ordina
+static inline void td_score_all_moves(ThreadData& td, moves* move_list, int tt_move, int* scores, float* policy_scores = nullptr, bool policy_used = false) {
+    const bool wtm = (td.side == white);
+    for (int i = 0; i < move_list->count; i++) {
+        int move = move_list->moves[i];
+        scores[i] = td_score_move(td, move, tt_move);
+
+        // (La logica della tua policy rimane identica qui)
+        if (policy_used && policy_scores != nullptr && !get_move_capture(move) && move != tt_move) {
+            int src = get_move_source(move), tgt = get_move_target(move);
+            int cs = wtm ? (src ^ 56) : src;
+            int ct = wtm ? (tgt ^ 56) : tgt;
+            int p_idx = cs * 64 + ct;
+            scores[i] += (int)(policy_scores[p_idx] * 250.0f);
+        }
+    }
+}
+
 // ============================================================================
 // REPETITION DETECTION
 // ============================================================================
@@ -838,6 +880,14 @@ static inline int td_is_repetition(ThreadData& td) {
 // ============================================================================
 
 static int td_quiescence(ThreadData& td, int alpha, int beta) {
+    // Illegal-position / king-capture guard (see td_negamax_abdada for the full
+    // rationale): never search a position where the side not to move is in check,
+    // because making the king capture desyncs the NNUE accumulator and crashes.
+    {
+        int opp_king_sq = get_ls1b_index((td.side == white) ? td.bitboards[k] : td.bitboards[K]);
+        if (td_is_square_attacked(td, opp_king_sq, td.side))
+            return mate_value - td.ply;
+    }
     if ((td.nodes & 4095) == 0) {
         if (stop_threads.load(std::memory_order_relaxed)) return 0;
         if (timeset && get_time_ms() > stoptime) {
@@ -884,14 +934,41 @@ static int td_quiescence(ThreadData& td, int alpha, int beta) {
     }
 
     moves move_list[1];
-    td_generate_moves(td, move_list);
-    td_sort_moves(td, move_list, tt_move);
+    // Se non siamo sotto scacco (!in_check), passa true per generare SOLO le catture!
+    td_generate_moves(td, move_list, !in_check);
+
+    // --- NUOVA FASE: Calcola punteggi senza ordinare (Pick-Next) ---
+    int move_scores[256];
+    // Chiamiamo la funzione senza Policy, tanto in Q-Search esploriamo perlopi� catture
+    td_score_all_moves(td, move_list, tt_move, move_scores);
 
     int best_move = 0;
     int legal_moves = 0;
 
     for (int count = 0; count < move_list->count; count++) {
+
+        // --- INIZIO PICK-NEXT: Cerca la mossa migliore tra quelle rimaste ---
+        int best_idx = count;
+        for (int i = count + 1; i < move_list->count; i++) {
+            if (move_scores[i] > move_scores[best_idx]) {
+                best_idx = i;
+            }
+        }
+
+        // Scambiamo mossa e score per portarli in cima
+        if (best_idx != count) {
+            int tmp_move = move_list->moves[count];
+            move_list->moves[count] = move_list->moves[best_idx];
+            move_list->moves[best_idx] = tmp_move;
+
+            int tmp_score = move_scores[count];
+            move_scores[count] = move_scores[best_idx];
+            move_scores[best_idx] = tmp_score;
+        }
+
+        // Ora move � garantita essere la migliore disponibile
         int move = move_list->moves[count];
+        // --- FINE PICK-NEXT ---
 
         if (!in_check) {
             if (!get_move_capture(move)) continue;
@@ -947,6 +1024,22 @@ static int td_quiescence(ThreadData& td, int alpha, int beta) {
 int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cut_node, int excluded_move = 0) {
     td.pv_length[td.ply] = td.ply;
 
+    // Illegal-position / king-capture guard. If the side-to-move can capture the
+    // opponent's king (i.e. the side NOT to move is in check), the position is
+    // illegal - typically a malformed input FEN (e.g. a tablebase test position
+    // with the enemy king left in check). Searching it would let us actually make
+    // the king-capturing move; td_make_move accepts it (our own king is safe),
+    // sf_pos_do then removes the enemy king from the NNUE mirror, and the next
+    // eval indexes a king-bucket feature for a now-kingless side -> access
+    // violation. Return an immediate winning score instead. In legal play the
+    // side not to move is never in check, so this costs one attack probe and
+    // never fires.
+    {
+        int opp_king_sq = get_ls1b_index((td.side == white) ? td.bitboards[k] : td.bitboards[K]);
+        if (td_is_square_attacked(td, opp_king_sq, td.side))
+            return mate_value - td.ply;
+    }
+
     if (td.ply && (td_is_repetition(td) || td.fifty >= 100)) return 0;
 
     bool pv_node = (beta - alpha > 1);
@@ -984,9 +1077,27 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
 
     if (depth <= 0) return td_quiescence(td, alpha, beta);
 
-    if (td.ply >= max_ply) return td_evaluate(td);
+    // Ply ceiling. Set pv_length here so the parent's PV-copy loop reads a sane
+    // (terminating) bound from pv_length[ply+1] instead of OOB garbage.
+    if (td.ply >= max_ply) { td.pv_length[td.ply] = td.ply; return td_evaluate(td); }
 
     td.nodes++;
+
+    // Syzygy tablebase WDL probe. For a non-root node with no castling rights
+    // and few enough pieces, the tablebase gives the exact game value (side-to-
+    // move relative), so we short-circuit the search with it. Cursed/blessed
+    // results map to 0 (50-move-rule draws); the actual win conversion in the
+    // reached position is guaranteed by the root DTZ probe. count_bits runs
+    // only when tablebases are loaded (syzygy_max_pieces() > 0).
+    {
+        unsigned tb_men = syzygy_max_pieces();
+        if (tb_men && td.ply && !excluded_move && td.castle == 0 &&
+            (unsigned)count_bits(td.occupancies[both]) <= tb_men) {
+            int tb_score;
+            if (syzygy_probe_wdl(td, td.ply, tb_score))
+                return tb_score;
+        }
+    }
 
     int king_sq = get_ls1b_index((td.side == white) ? td.bitboards[K] : td.bitboards[k]);
     bool in_check = td_is_square_attacked(td, king_sq, td.side ^ 1);
@@ -1082,7 +1193,7 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
     // TEST #1: policy SOLO alla radice (ply==0), solo per l'ordinamento delle
     // mosse. E' l'uso dove una rete di predizione-mossa ha piu' senso e costa
     // ~zero (una forward per iterazione ID). Nessun aggiustamento LMR (vedi sotto).
-    if (g_use_policy && td.ply ==0 && quiet_count >= 3) {
+    if (g_use_policy && td.ply == 0 && quiet_count >= 3) {
         static constexpr int PCACHE_SIZE = 1 << 8;   // 256 entry ~4MB/thread (policy root-only: bastano pochissime entry)
         struct PolicyCacheEntry { U64 key; bool valid; float scores[4096]; };
         static thread_local PolicyCacheEntry pcache[PCACHE_SIZE] = {};
@@ -1101,8 +1212,36 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
         policy_used = true;
     }
 
-    // 4. Ordina le mosse (con il contributo della policy se attiva).
-    td_sort_moves(td, move_list, tt_move, current_policy_scores, policy_used);
+    // --- NUOVA FASE: Assegna punteggi senza ordinare l'array (Pick-Next) ---
+    int move_scores[256];
+    td_score_all_moves(td, move_list, tt_move, move_scores, current_policy_scores, policy_used);
+
+    // 4b. Soglie RANK-BASED per la LMR guidata dalla policy. Usiamo i ranghi
+    // (top-3 / quartile inferiore) invece di soglie assolute sul logit, perche'
+    // la scala dei logit varia tra versioni della rete. Calcolate UNA volta per
+    // nodo; policy_used e' vero solo alla radice, quindi il costo e' trascurabile.
+    float policy_hi_cut = 1e9f;    // default: nessuna mossa "alta"
+    float policy_lo_cut = -1e9f;   // default: nessuna mossa "bassa"
+    if (policy_used) {
+        float qlog[256];
+        int qn = 0;
+        const bool wtm = (td.side == white);
+        for (int i = 0; i < move_list->count; i++) {
+            int m = move_list->moves[i];
+            if (get_move_capture(m) || get_move_promoted(m)) continue;   // solo quiet (come is_quiet)
+            int src = get_move_source(m), tgt = get_move_target(m);
+            int idx = (wtm ? (src ^ 56) : src) * 64 + (wtm ? (tgt ^ 56) : tgt);
+            qlog[qn++] = current_policy_scores[idx];
+        }
+        if (qn >= 4) {
+            std::sort(qlog, qlog + qn, std::greater<float>());
+            int hi_i = (qn > 3) ? 2 : (qn - 1);   // confine top-3
+            int lo_i = (qn * 3) / 4;              // confine quartile inferiore
+            if (lo_i >= qn) lo_i = qn - 1;
+            policy_hi_cut = qlog[hi_i];
+            policy_lo_cut = qlog[lo_i];
+        }
+    }
 
     int best_move = 0;
     int best_score = -infinity;
@@ -1124,7 +1263,29 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
 
     // First pass: search moves, deferring busy ones
     for (int count = 0; count < move_list->count; count++) {
+
+        // --- INIZIO PICK-NEXT: Cerca la mossa migliore tra quelle rimaste ---
+        int best_idx = count;
+        for (int i = count + 1; i < move_list->count; i++) {
+            if (move_scores[i] > move_scores[best_idx]) {
+                best_idx = i;
+            }
+        }
+
+        // Scambiamo sia la mossa che lo score per portarli in cima
+        if (best_idx != count) {
+            int tmp_move = move_list->moves[count];
+            move_list->moves[count] = move_list->moves[best_idx];
+            move_list->moves[best_idx] = tmp_move;
+
+            int tmp_score = move_scores[count];
+            move_scores[count] = move_scores[best_idx];
+            move_scores[best_idx] = tmp_score;
+        }
+        // Ora move � garantita essere la migliore
         int move = move_list->moves[count];
+        // --- FINE PICK-NEXT ---
+
         if (move == excluded_move) continue;   // singular search: skip the TT move
         bool is_capture = get_move_capture(move);
         bool is_promotion = get_move_promoted(move);
@@ -1237,14 +1398,20 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
                 else if (hist_r < -1) hist_r = -1;
                 reduction -= hist_r;
 
-                // --- LMR guidata dalla policy: DISABILITATA per il TEST #1 ---
-                // (solo ordinamento alla radice). Riattivare per i test #2/#3.
-                // if (policy_used) {
-                //     int p_idx = (get_move_source(move) ^ 56) * 64 + (get_move_target(move) ^ 56);
-                //     float p_score = current_policy_scores[p_idx];
-                //     if (p_score < -4.0f) reduction += 1;
-                //     if (p_score > 6.0f) reduction -= 1;
-                // }
+                // --- LMR guidata dalla policy (RANK-BASED), TEST #2 ---
+                // Le mosse quiet nel top-3 della policy vengono ridotte di meno
+                // (la rete le ritiene candidate forti); quelle nel quartile
+                // inferiore vengono ridotte di piu'. Soglie per-rango, robuste alla
+                // scala dei logit. current_policy_scores e' valido solo dove la
+                // policy e' stata interrogata (oggi: radice, ply 0).
+                if (policy_used) {
+                    const bool wtm = (td.side == white);
+                    int src = get_move_source(move), tgt = get_move_target(move);
+                    int p_idx = (wtm ? (src ^ 56) : src) * 64 + (wtm ? (tgt ^ 56) : tgt);
+                    float p_score = current_policy_scores[p_idx];
+                    if (p_score >= policy_hi_cut) reduction--;
+                    else if (p_score <= policy_lo_cut) reduction++;
+                }
 
                 if (reduction < 0) reduction = 0;
                 if (reduction > depth - 2) reduction = depth - 2;
@@ -1626,6 +1793,28 @@ void wait_for_search_done() {
 void launch_search(int depth) {
     stop_search_threads();          // stop a previous search (if any)
     wait_for_search_done();         // join it and its helpers
+
+    // Syzygy ROOT probe (DTZ): if the GLOBAL (root) position is covered by the
+    // installed tablebases, play the perfect move immediately instead of
+    // searching. Done HERE, on the main UCI thread and BEFORE spawning the
+    // worker, so it cannot race with parse_position() of the next command.
+    // Needs .rtbz (DTZ) files; with WDL-only tables it simply fails and we fall
+    // through to a normal search (whose in-search WDL probe already fixes the
+    // evaluation of covered endgames).
+    {
+        int tb_move = 0, tb_score = 0;
+        if (syzygy_probe_root(tb_move, tb_score)) {
+            new_search();
+            printf("info depth 1 score cp %d pv ", tb_score);
+            print_move(tb_move);
+            printf("\nbestmove ");
+            print_move(tb_move);
+            printf("\n");
+            fflush(stdout);
+            return;
+        }
+    }
+
     stop_threads.store(false, std::memory_order_relaxed);  // clear before spawning
     search_master = std::thread(search_position_mt, depth);
 }
@@ -1642,6 +1831,9 @@ void search_position_mt(int depth) {
 
     // NOTE: stop_threads is cleared by launch_search() BEFORE this thread is
     // spawned, so that a "stop" arriving right after "go" is not lost here.
+    // NOTE: the Syzygy ROOT probe is NOT done here. It reads the GLOBAL board and
+    // must run on the main (UCI) thread BEFORE this worker is spawned - otherwise
+    // it races with parse_position() of the next command. See launch_search().
     stopped = 0;
 
     for (int i = 0; i < num_threads; i++) {

@@ -12,6 +12,7 @@
 #include "misc.h"
 #include "io.h"
 #include "threads.h"
+#include "syzygy.h"
 #include <thread>
 #include <string.h>
 
@@ -240,6 +241,7 @@ void uci_loop()
             printf("option name DataLog type check default false\n");
             printf("option name DataFile type string default triumviratus_dataset.txt\n");
             printf("option name UsePolicy type check default false\n");
+            printf("option name SyzygyPath type string default <empty>\n");
             printf("uciok\n");
             fflush(stdout);
         }
@@ -355,6 +357,26 @@ void uci_loop()
         {
             const char* v = input + 31;
             set_use_policy(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
+        }
+
+        // UCI command: "setoption name SyzygyPath value <dir[;dir...]>"
+        // Loading touches global tablebase state; stop any running search first.
+        else if (strncmp(input, "setoption name SyzygyPath value ", 32) == 0)
+        {
+            stop_search_threads();
+            wait_for_search_done();
+            char path[1024];
+            strncpy(path, input + 32, sizeof(path) - 1);
+            path[sizeof(path) - 1] = '\0';
+            size_t n = strlen(path);
+            while (n > 0 && (path[n - 1] == '\n' || path[n - 1] == '\r' || path[n - 1] == ' '))
+                path[--n] = '\0';
+            if (syzygy_init(path))
+                printf("info string Syzygy: tablebases loaded (max %u-men) from %s\n",
+                       syzygy_max_pieces(), path);
+            else
+                printf("info string Syzygy: probing disabled (no tablebases found)\n");
+            fflush(stdout);
         }
 
         // Debug command: "d" - print board (non-UCI, but useful)

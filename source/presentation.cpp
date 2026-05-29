@@ -1,58 +1,78 @@
-#include "stdio.h"
+#include <cstdio>
 #include <string>
-#include <sstream>
+#include <vector>
 #include <iostream>
-#include <iomanip>
+#ifdef _WIN32
 #include <Windows.h>
+#include <io.h>
+#define ISATTY(fd) _isatty(fd)
+#define FILENO(f)  _fileno(f)
+#else
+#include <unistd.h>
+#define ISATTY(fd) isatty(fd)
+#define FILENO(f)  fileno(f)
+#endif
 #include "presentation.h"
 
 int getConsoleWidth() {
 #ifdef _WIN32
     CONSOLE_SCREEN_BUFFER_INFO csbi;
-    int columns;
-    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
-    columns = csbi.srWindow.Right - csbi.srWindow.Left + 1;
-    return columns;
+    if (GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi))
+        return csbi.srWindow.Right - csbi.srWindow.Left + 1;
+    return 80;
 #else
-    struct winsize size;
-    ioctl(STDOUT_FILENO, TIOCGWINSZ, &size);
-    return size.ws_col;
+    return 80;
 #endif
 }
 
 void printLine() {
-    int consoleWidth = getConsoleWidth();
-    std::string line(consoleWidth, '_');
+    int w = getConsoleWidth();
+    if (w < 1) w = 80;
+    std::string line(w, '_');
     std::cout << "\033[38;2;205;133;63m" << line << "\033[0m" << std::endl;
 }
 
+// Banner di avvio. Pure-ASCII (rende ovunque), box generato dal codice
+// (allineamento garantito), colori ANSI solo se stdout e' un terminale
+// (in pipe verso un GUI stampa in chiaro, senza sporcare i log).
 void ascii_art() {
-    std::wstring asciiArt = LR"(
- _____________________________________________________________________
-|                                                                     |
-|                                                           (\=,      |
-|                                                          //  .\     |
-|                                                         (( \_  \    |
-|      _____     _                      ____    ___        ))  `\_)   |
-|     |_   _| __(_)_   _ _ __ _____   _|___ \  / _ \      (/     \    |
-|       | || '__| | | | | '_ ` _ \ \ / / __) || | | |      | _.-'|    |
-|       | || |  | | |_| | | | | | \ V / / __/ | |_| |       )___(     |
-|       |_||_|  |_|\__,_|_| |_| |_|\_/ |_____(_)___/       (=====)    |
-|                                                          }====={    |
-|    _______________________________________________      (_______)   |
-|                                                                     |
-|                         By: Francesco                               |
-|                     Multi-Threaded SMP Edition                      |
-|_____________________________________________________________________|
-    )";
+    const int W = 60;  // larghezza interna del riquadro
 
-    int consoleWidth = 80;
-    size_t firstNewline = asciiArt.find_first_of(L'\n');
-    int padding = (int)((consoleWidth - 1 - (int)firstNewline) / 3.5);
+    const bool tty = ISATTY(FILENO(stdout)) != 0;
+    const std::string GOLD = tty ? "\033[38;2;218;165;32m" : "";
+    const std::string DIM  = tty ? "\033[38;2;150;111;51m" : "";
+    const std::string RST  = tty ? "\033[0m" : "";
 
-    std::wistringstream iss(asciiArt);
-    std::wstring line;
-    while (std::getline(iss, line, L'\n')) {
-        std::wcout << "\033[38;2;205;133;63m" << std::setw(padding + (int)line.length()) << line << "\033[0m" << std::endl;
+    // Pezzo di scacchi a destra, testo a sinistra. Ogni riga <= W; il codice
+    // riempie a destra fino a W, quindi il riquadro resta sempre allineato.
+    std::vector<std::string> body = {
+        "",
+        "                                          (\\=,",
+        "    T R I U M V I R A T U S              //  .\\",
+        "    ==========================          (( \\_  \\",
+        "                                         ))  `\\_)",
+        "    Hybrid Chess Engine                 (/     \\",
+        "    Version 3.3                         | _.-'|",
+        "                                         )___(",
+        "    [+] NNUE Evaluation                 (=====)",
+        "    [+] Policy Network (CNN)            }====={",
+        "    [+] ABDADA Parallel SMP            (_______)",
+        "",
+        "    by  Francesco  Torsello",
+        "",
+    };
+
+    int indent = (getConsoleWidth() - (W + 4)) / 2;
+    if (indent < 0) indent = 0;
+    const std::string pad(indent, ' ');
+    const std::string border = pad + "+" + std::string(W + 2, '=') + "+";
+
+    std::cout << "\n" << GOLD << border << RST << "\n";
+    for (std::string s : body) {
+        if ((int)s.size() > W) s = s.substr(0, W);
+        s.resize(W, ' ');
+        std::cout << GOLD << pad << "| " << s << " |" << RST << "\n";
     }
+    std::cout << GOLD << border << RST << "\n\n";
+    std::cout.flush();
 }

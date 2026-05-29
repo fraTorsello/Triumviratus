@@ -52,6 +52,28 @@ bool load_policy(const char* filename) {
     std::ifstream file(filename, std::ios::binary);
     if (!file.is_open()) return false;
 
+    // Validazione dimensione: il .bin DEVE corrispondere ESATTAMENTE
+    // all'architettura compilata, altrimenti leggeremmo pesi spazzatura
+    // (rete di architettura sbagliata) -> policy che peggiora il gioco in
+    // silenzio. Se non combacia, rifiutiamo (init_policy ha gia' azzerato i
+    // pesi -> policy disattivata, gioco corretto).
+    const std::streamsize expected =
+        (std::streamsize)(sizeof(conv1_w) + sizeof(conv1_b) +
+                          sizeof(conv2_w) + sizeof(conv2_b) +
+                          sizeof(conv3_w) + sizeof(conv3_b) +
+                          sizeof(conv4_w) + sizeof(conv4_b) +
+                          sizeof(hh_w) + sizeof(hh_b) +
+                          sizeof(ho_w) + sizeof(ho_b));
+    file.seekg(0, std::ios::end);
+    std::streamsize actual = file.tellg();
+    file.seekg(0, std::ios::beg);
+    if (actual != expected) {
+        printf("info string Policy net SCARTATA: dimensione %lld byte, attesi %lld "
+               "(architettura non corrispondente).\n",
+               (long long)actual, (long long)expected);
+        return false;
+    }
+
     file.read(reinterpret_cast<char*>(conv1_w), sizeof(conv1_w));
     file.read(reinterpret_cast<char*>(conv1_b), sizeof(conv1_b));
 
@@ -111,14 +133,21 @@ void evaluate_policy(ThreadData& td, float* output_scores) {
 
     std::memset(input_features, 0, sizeof(input_features));
 
-    // 1. Costruzione Tensore Input (12x8x8). py_sq = cpp_sq ^ 56 porta la
-    //    casa nell'orientamento python-chess (rank*8+file) usato dal dataset.
+    // 1. Costruzione Tensore Input (12x8x8) in codifica CANONICA sul lato che
+    //    muove (fonte unica: chess_encoding.py, ENCODING_VERSION = v2_canonical_stm):
+    //      - piani 0..5  = pezzi di CHI MUOVE ("us"); 6..11 = avversario ("them").
+    //      - Bianco al tratto: csq = cpp_sq ^ 56 ; plane = piece
+    //      - Nero   al tratto: csq = cpp_sq      ; plane = (piece + 6) % 12
+    //    (dim.: square_mirror(py) = py ^ 56 e py = cpp_sq ^ 56  =>  csq_nero = cpp_sq)
+    //    Cosi' la rete vede SEMPRE "us" in basso: coerente tra Bianco e Nero.
+    const bool white_to_move = (td.side == white);
     for (int piece = P; piece <= k; piece++) {
         U64 bb = td.bitboards[piece];
+        int plane = white_to_move ? piece : ((piece + 6) % 12);
         while (bb) {
             int cpp_sq = get_ls1b_index(bb);
-            int py_sq = cpp_sq ^ 56;
-            input_features[piece * 64 + py_sq] = 1.0f;
+            int csq = white_to_move ? (cpp_sq ^ 56) : cpp_sq;
+            input_features[plane * 64 + csq] = 1.0f;
             pop_bit(bb, cpp_sq);
         }
     }
@@ -141,8 +170,9 @@ void evaluate_policy(ThreadData& td, float* output_scores) {
     }
 
     // 4. Policy head, strato OUT: Conv1x1 (CH_HH -> CH_HO), NESSUNA ReLU (logits).
-    //    output index (sq*64 + co) == (from)*64 + (to), coerente con
-    //    p_idx = (source^56)*64 + (target^56) della ricerca.
+    //    output index (sq*64 + co) == (from_canon)*64 + (to_canon). La ricerca
+    //    (td_sort_moves) calcola p_idx con la STESSA codifica canonica:
+    //      Bianco: (sq ^ 56) ; Nero: sq.
     for (int sq = 0; sq < 64; ++sq) {
         for (int co = 0; co < CH_HO; ++co) {
             float sum = ho_b[co];

@@ -36,8 +36,11 @@ struct ThreadData {
     // counter-move heuristic to know the "previous move" at a node.
     int move_stack[max_ply + 8];
 
-    // Move ordering
-    int killer_moves[2][max_ply];
+    // Move ordering. +8 slack on the ply dimension: a node entering at
+    // ply == max_ply-1 increments td.ply (and reads pv_length[ply+1]), so the
+    // ply index can transiently reach max_ply. Without the slack that is an OOB
+    // write that aliases pv_table[0][0] -> wild loop bound -> access violation.
+    int killer_moves[2][max_ply + 8];
     int history_moves[12][64];
     // Counter-move heuristic: counter_moves[prev_piece][prev_to] = the quiet
     // reply that most recently caused a beta cutoff after that previous move.
@@ -49,9 +52,11 @@ struct ThreadData {
     // Capture history: [moving piece][to square][captured piece].
     int capture_history[12][64][12];
 
-    // PV table
-    int pv_length[max_ply];
-    int pv_table[max_ply][max_ply];
+    // PV table. +8 slack on the ply dimension for the same reason as
+    // killer_moves above (pv_length[ply+1] / pv_table[ply+1] lookahead at the
+    // deepest searched node).
+    int pv_length[max_ply + 8];
+    int pv_table[max_ply + 8][max_ply + 8];
     
     // Results
     int best_move;

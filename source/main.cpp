@@ -13,6 +13,12 @@
 //Added for policy network
 #include "policy_bridge.h"
 
+// Syzygy tablebase probing (Fathom)
+#include "syzygy.h"
+
+// Banner di avvio
+#include "presentation.h"
+
 #include <string>
 #include <fstream>
 #include <iostream>
@@ -59,8 +65,30 @@ static std::string resolve_net_path(const std::string& name)
     return std::string();
 }
 
+// Default Syzygy directory: a "Syzygy" folder next to the executable. When the
+// exe runs from x64\Release this resolves to x64\Release\Syzygy. Returned even
+// if it does not exist - tb_init() just finds 0 files and stays disabled.
+static std::string default_syzygy_dir()
+{
+#ifdef _WIN32
+    char buf[MAX_PATH];
+    DWORD n = GetModuleFileNameA(NULL, buf, MAX_PATH);
+    if (n > 0 && n < MAX_PATH)
+    {
+        std::string exePath(buf, n);
+        size_t slash = exePath.find_last_of("\\/");
+        if (slash != std::string::npos)
+            return exePath.substr(0, slash) + "\\Syzygy";
+    }
+#endif
+    return std::string("Syzygy");
+}
+
 int main()
 {
+    // Banner di presentazione (appena si apre il motore)
+    ascii_art();
+
     // Initialize all bitboards and attack tables (silent)
     init_bitboards();
 
@@ -94,8 +122,20 @@ int main()
         printf("info string ATTENZIONE: Impossibile caricare triumviratus_policy.bin!\n");
     }
 
+    // Auto-load Syzygy tablebases from a "Syzygy" folder next to the exe
+    // (x64\Release\Syzygy). The "SyzygyPath" UCI option overrides this at runtime.
+    {
+        std::string tbDir = default_syzygy_dir();
+        if (syzygy_init(tbDir.c_str()))
+            printf("info string Syzygy: %u-men tablebases loaded from %s\n",
+                   syzygy_max_pieces(), tbDir.c_str());
+    }
+
     // Run UCI loop
     uci_loop();
+
+    // Release Syzygy tablebase memory (no-op if SyzygyPath was never set).
+    syzygy_free();
 
     return 0;
 }
