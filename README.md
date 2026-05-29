@@ -17,7 +17,7 @@ Currently, Triumviratus 3.3 Hybrid plays at an estimated strength of **~3450+ El
 * **Board Representation:** 64-bit Bitboards.
 * **Search:** Principal Variation Search (PVS), Iterative Deepening, Aspiration Windows.
 * **Pruning & Reductions:** Null Move Pruning (NMP), Late Move Reductions (LMR), Reverse Futility / Futility Pruning, Razoring, Late Move Pruning (LMP), SEE pruning, History & Continuation-History Heuristics.
-* **Parallel Search:** ABDADA-style multi-threaded SMP.
+* **Parallel Search:** ABDADA-style multi-threaded.
 * **Evaluation:** NNUE (HalfKAv2_hm architecture) with dual nets (big/small) for highly accurate static evaluation.
 * **Endgames:** Syzygy tablebase probing (WDL in search, DTZ at the root).
 * **Policy Network:** Experimental move-ordering policy network (can be toggled via UCI options).
