@@ -72,3 +72,7 @@ You may redistribute and/or modify Triumviratus under the terms of the GPLv3. It
 - **[Syzygy tablebases](https://github.com/syzygy1/tb)** — endgame tablebase format by Ronald de Man.
 
 The classical search (PVS, pruning, reductions, ABDADA SMP), the policy network, and the engine glue are original work by Francesco Torsello.
+
+## Development Note
+
+Triumviratus is developed openly and with **significant AI assistance** (coding, refactoring, and documentation). The NNUE evaluation is **derived from Stockfish** (GPLv3, credited above); the original research focus of this project is the **policy network** and its integration into the search. This is stated transparently so the nature and provenance of the code are clear.
