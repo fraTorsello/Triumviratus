@@ -1,5 +1,16 @@
 # Triumviratus Chess Engine - Multi-threading Fixes
 
+> **Architecture note.** Triumviratus' parallel search is **ABDADA** (Alpha-Beta
+> Distributed Avoiding Duplicate Analysis): all threads share a single
+> transposition table and mark in-progress nodes as *busy* so that helpers avoid
+> re-searching nodes another thread is already on, with light depth-staggering
+> across helpers (`start_depth = 1 + thread_id % 2`) purely for hash diversity.
+> It is **not** Lazy SMP. Where this document refers to "Lazy SMP" it is either for
+> contrast (explaining what ABDADA improves on) or historical context — several of
+> the fixes below predate the move to ABDADA. The relevant code lives in a single
+> `threads.cpp` / `tt.h` (the `*_new` filenames mentioned in the Integration Guide
+> are historical).
+
 ## Summary of Issues Found and Fixed
 
 ### 1. **Race Conditions in Transposition Table (CRITICAL)**
@@ -62,7 +73,7 @@ Different parts of the code check different variables, causing threads to not st
 
 ### 4. **Thread Result Aggregation Missing**
 
-**Problem:** In Lazy SMP, helper threads search the same position at different depths to share hash table entries. However, the original code:
+**Problem:** Under ABDADA, helper threads search the same position (with light depth-staggering) and share hash table entries through the common TT. However, the original code:
 - Only uses main thread's result
 - Never checks if helper threads found a better move
 
@@ -102,7 +113,7 @@ This works but is confusing. More importantly, after re-searching with full wind
 
 ### 6. **Helper Thread Depth Distribution**
 
-**Problem:** All threads searching the same depth provides less diversity. Lazy SMP benefits from threads searching at slightly different depths.
+**Problem:** All threads searching the same depth provides less diversity. SMP search (ABDADA included) benefits from threads searching at slightly different depths.
 
 **Solution:** Helper threads start at different depths:
 ```cpp
@@ -211,7 +222,7 @@ With these fixes, you should see:
 
 1. **Correct multi-threaded behavior** - No crashes or corruption
 2. **Linear scaling to ~4 threads** - Diminishing returns after that
-3. **~5-10% Elo gain** per doubling of threads (typical for Lazy SMP)
+3. **~5-10% Elo gain** per doubling of threads (typical for shared-TT SMP)
 4. **Correct fifty-move detection** - Draws properly detected
 
 ---
@@ -227,7 +238,7 @@ With these fixes, you should see:
 
 ## Remaining Improvements (Not Implemented)
 
-1. **Lazy SMP with shared killers** - Can improve cutoffs
+1. **Shared killers across threads** - Can improve cutoffs
 2. **Contempt factor** - For avoiding draws when ahead
 3. **Better time management** - Pondering, sudden death handling
 4. **Singular extensions** - The `excluded_move` parameter exists but is not yet exploited
