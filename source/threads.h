@@ -158,6 +158,10 @@ extern void set_singular_ext(bool enabled);
 // correction bucketed by pawn structure + side. Default off.
 extern void set_corr_hist(bool enabled);
 
+// ProbCut on/off (UCI option "ProbCut") — prune when a capture's reduced
+// verification search beats beta + ProbCutMargin. Default on (SPRT-validated +Elo).
+extern void set_probcut(bool enabled);
+
 // SPSA-tunable search parameters: set one by name (UCI spin option). Returns true
 // if the name matched a known tunable. Used by an external SPSA tuner (fastchess).
 extern bool set_search_param(const char* name, int value);

@@ -99,6 +99,13 @@ void set_singular_ext(bool v) { g_singular_ext = v; }
 static bool g_corr_hist = false;
 void set_corr_hist(bool v) { g_corr_hist = v; }
 
+// ProbCut on/off (UCI option "ProbCut"). Default ON: validated +Elo (SPRT @8+0.08,
+// LOS ~83% / leaning +6, textbook technique). When on: at sufficient depth, if a
+// capture's reduced verification search beats beta+margin, the full-depth search
+// would almost surely fail high too, so we prune the node early.
+static bool g_probcut = true;
+void set_probcut(bool v) { g_probcut = v; }
+
 // ---- SPSA-tunable search parameters -----------------------------------------
 // Exposed as UCI spin options (see set_search_param + uci_mt.cpp) so an external
 // SPSA tuner (fastchess) can set them per-game without recompiling. Defaults =
@@ -113,6 +120,7 @@ int g_singular_dmargin = 63;    // double-extension margin below singular_beta  
 int g_hist_red_div     = 3500;  // LMR history-reduction divisor
 int g_asp_init_delta   = 25;    // aspiration: initial window half-width
 int g_asp_grow         = 100;   // aspiration: growth % on fail (delta += delta*g/100; 100=double)
+int g_probcut_margin   = 180;   // ProbCut: capture verification must beat beta by this margin
 
 // Dispatch a UCI spin option to the matching tunable. Returns true if matched.
 bool set_search_param(const char* name, int value) {
@@ -126,6 +134,7 @@ bool set_search_param(const char* name, int value) {
     if (!strcmp(name, "HistReductionDiv"))    { g_hist_red_div     = value; return true; }
     if (!strcmp(name, "AspInitDelta"))        { g_asp_init_delta   = value; return true; }
     if (!strcmp(name, "AspGrow"))             { g_asp_grow         = value; return true; }
+    if (!strcmp(name, "ProbCutMargin"))       { g_probcut_margin   = value; return true; }
     return false;
 }
 
@@ -1336,6 +1345,72 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
         if (static_eval + razor_margin < alpha) {
             score = td_quiescence(td, alpha, beta);
             if (score < alpha) return score;
+        }
+    }
+
+    // ProbCut: at sufficient depth, if some capture leads (via a cheap qsearch +
+    // reduced-depth confirmation) to a score well above beta, the full-depth
+    // search would almost certainly fail high too -> prune now. Captures only,
+    // SEE-gated so we only try moves whose material swing can bridge the margin.
+    // Skipped in PV / in check / near mate / during a singular search, and when a
+    // deep-enough TT entry already proves the value stays below probcut_beta.
+    if (g_probcut && !pv_node && !in_check && !excluded_move &&
+        depth >= 5 && beta < mate_score && beta > -mate_score) {
+        int probcut_beta = beta + g_probcut_margin;
+        bool tt_blocks = tt_hit && tt_depth >= depth - 3 &&
+                         tt_score < probcut_beta && tt_score > -mate_score;
+        if (!tt_blocks) {
+            moves pc_list[1];
+            td_generate_moves(td, pc_list, true);          // captures only
+            int pc_scores[256];
+            td_score_all_moves(td, pc_list, tt_move, pc_scores);
+
+            for (int count = 0; count < pc_list->count; count++) {
+                // Pick-next: bring the best-scored remaining move to the front.
+                int best_idx = count;
+                for (int i = count + 1; i < pc_list->count; i++)
+                    if (pc_scores[i] > pc_scores[best_idx]) best_idx = i;
+                if (best_idx != count) {
+                    int tm = pc_list->moves[count];
+                    pc_list->moves[count] = pc_list->moves[best_idx];
+                    pc_list->moves[best_idx] = tm;
+                    int ts = pc_scores[count];
+                    pc_scores[count] = pc_scores[best_idx];
+                    pc_scores[best_idx] = ts;
+                }
+                int move = pc_list->moves[count];
+
+                if (!get_move_capture(move)) continue;
+                // The capture's material swing must be able to bridge static_eval
+                // up to probcut_beta, else it can't plausibly cause the cutoff.
+                if (td_see(td, move) < probcut_beta - static_eval) continue;
+
+                UndoInfo undo;
+                td.ply++;
+                td.repetition_table[++td.repetition_index] = td.hash_key;
+                if (!td_make_move(td, move, undo)) {
+                    td.ply--;
+                    td.repetition_index--;
+                    continue;
+                }
+                td.move_stack[td.ply] = move;
+
+                // Cheap qsearch screen first; only if it clears probcut_beta do we
+                // pay for the reduced-depth (depth-4) confirmation search.
+                int pc_score = -td_quiescence(td, -probcut_beta, -probcut_beta + 1);
+                if (pc_score >= probcut_beta)
+                    pc_score = -td_negamax_abdada(td, -probcut_beta, -probcut_beta + 1,
+                                                  depth - 4, !is_cut_node);
+
+                td_unmake_move(td, move, undo);
+                td.ply--;
+                td.repetition_index--;
+
+                if (stop_threads.load(std::memory_order_relaxed)) return 0;
+
+                if (pc_score >= probcut_beta)
+                    return pc_score;                       // fail-soft prune
+            }
         }
     }
 

@@ -11,14 +11,17 @@ Ultimo aggiornamento: 2026-05-30
 
 ## 1. Stato attuale
 
-- **Versione:** Triumviratus 3.3.2 (MSBuild Release|x64, MSVC v143, AVX2).
-- **Forza stimata:** ~3450–3470 Elo (3.3.1 era ~3430-3450; +~18 da improving, +~34 da
-  singular-ext rispetto alla 3.3.1; node-TM ~0). Stima grossolana, da ri-ancorare.
+- **Versione:** Triumviratus 3.3.4 (MSBuild Release|x64, MSVC v143, AVX2).
+- **Forza stimata:** ~3470–3490 Elo (3.3.1 ~3430-3450; +~18 improving, +~34 singular-ext,
+  +~19 SPSA-coarse dei margini, +~6 ProbCut). Stima grossolana, da ancorare col gauntlet.
 - **Eval:** NNUE ibrida (feature transformer + affine), incrementale + dual-net lazy.
 - **Ricerca:** alpha-beta PVS, ABDADA SMP (shared TT + busy-bit + depth-staggering),
-  improving heuristic, singular ext avanzate (double/negative), node-based TM, Syzygy.
+  improving heuristic, singular ext avanzate (double/negative), ProbCut, node-based TM,
+  margini SPSA-tuned (RFP/razor/futility/singular), Syzygy.
 - **Toggle UCI diagnostici/A-B:** `EvalCache` (on), `Improving` (on), `NodeTM` (on),
-  `SingularExt` (on), `UsePolicy` (off), `EvalOff` (profiling).
+  `SingularExt` (on), `ProbCut` (on), `CorrHist` (off), `UsePolicy` (off), `EvalOff` (profiling).
+- **Spin SPSA-tunabili:** RFPMargin, Razor*, Futility*, SingularDoubleMargin, HistReductionDiv,
+  AspInitDelta, AspGrow, ProbCutMargin.
 
 ### Note di profiling (riferimento)
 - Eval NNUE = ~60% del tempo/nodo. eval-OFF ≈ 2.3M nps, eval-ON ≈ 0.9M nps (1 thread).
@@ -37,6 +40,8 @@ Ultimo aggiornamento: 2026-05-30
 | 2026-05 | **Node-Based Time Management** (`NodeTM`) | tempo | **Neutra** (~+3 ±14, LOS 64%). Non dannosa, reduce-only. Tenuta on. NB: prima versione aveva un bug grave (scalava il timestamp assoluto invece della durata → perdeva a tempo / depth-6); risolto scalando `soft - starttime`. |
 | 2026-05 (v3.3.2) | **Singular Extensions avanzate** (Double +2 / Negative −1) (`SingularExt`) | ricerca | **+34.1 ±23.9 Elo, LOS 99.7%** @3+0.1, 235 partite (sopra node-TM). Lower bound +10 → successo netto. Il lever più grosso finora. |
 | 2026-05 | **Correction history** (pawn-key bucket, `CorrHist`) | ricerca | **Neutra** → **default OFF**. Versione aggressiva (cap 48) = −12 Elo; versione gentile (cap 16, learn /512) ≈ 0 (±17). Codice tenuto dormiente per un retry con SPSA. |
+| 2026-05 (v3.3.3) | **SPSA coarse dei margini** (RFP 80→30, RazorMult→102, FutilityBase→82, FutilityMult→66, SingularDoubleMargin→63) | tuning | **+18.8 ±15.5 Elo, LOS 99.2%** @3+0.2. Cotto nei default. Fine-pass successivo (HistRedDiv/AspGrow) = neutro → scartato. |
+| 2026-05 (v3.3.4) | **ProbCut** (`ProbCut`, margine `ProbCutMargin` def 180) | ricerca | **+6.6 ±13.2, LOS ~84%** @8+0.08 (SPRT non chiuso ma trend + stabile su tecnica standard). Accettata default-on. Margine in taratura SPSA. |
 | 2026-05 | Syzygy tablebases (Fathom, WDL+DTZ) | correttezza | Finali corretti. |
 
 ### Vicoli ciechi (NON riprovare)
@@ -59,11 +64,11 @@ Legenda:
 |---|------|-----|------|---|------|
 | 1 | **Improving su LMP + null-move** | +2..8 | ★ | 1 | RIMANDATA: implementata poi tolta (troppo piccola da isolare). Da riprovare singola. |
 | 2 | ~~Node-Based Time Management~~ | +5..15 | ★ | 1 | **FATTO** (v3.3.2), neutra ~+3. Toggle `NodeTM`. |
-| 3 | **Aspiration window tuning** | +2..8 | ★ | 1 | Larghezza iniziale + crescita. Solo costanti da SPRT. |
-| 4 | **SPSA tuning dei margini** (RFP/futility/razor/LMR) | +5..15 | ★★ | 1 | Setup iniziale, poi sforna Elo "gratis" su parametri esistenti. Abilita tutto il resto. |
+| 3 | ~~Aspiration window tuning~~ | +2..8 | ★ | 1 | **FATTO** (esposto AspInitDelta/AspGrow, tarato in fine-pass): **neutro** (~0), AspInitDelta piatto. Resta ai default. |
+| 4 | ~~SPSA tuning dei margini~~ (RFP/futility/razor/LMR) | +5..15 | ★★ | 1 | **FATTO** (v3.3.3): coarse +18.8 Elo cotto. Infra SPSA pronta (spsa_tune*.py) per ogni param futuro. |
 | 5 | ~~Singular Extensions avanzate~~ (Double + Negative) | +10..20 | ★★ | 1 | **FATTO** (v3.3.2): +34 Elo, LOS 99.7%. Toggle `SingularExt`. |
 | 6 | **Correction History** | +10..20 | ★★ | 1 | Corregge le strutture che la rete sovra/sotto-stima sistematicamente. Alto impatto. |
-| 7 | **ProbCut** | +5..12 | ★★ | 1 | Taglio con ricerca shallow sopra beta + margine. Classico +Elo AB. |
+| 7 | ~~ProbCut~~ | +5..12 | ★★ | 1 | **FATTO** (v3.3.4): +6.6 Elo, LOS ~84% @8+0.08. Default on (`ProbCut`), margine 180 in taratura SPSA (`ProbCutMargin`). |
 | 8 | **History gravity/aging + continuation nel pruning** | +5..15 | ★★ | 1 | Raffina riduzioni/potature con storia 1-2 ply. |
 | 9 | **Address Sanitizer (`/fsanitize=address`)** | ~0 | ★ | 2 | Non dà Elo ma stana il crash ~1/400 della GUI. Alto valore per release/tornei. Fallo presto. |
 | 10 | **TT bucketizzata (4-way) + aging migliore** | +3..10 | ★★ | 2 | Meno collisioni/thrashing. |

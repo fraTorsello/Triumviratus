@@ -248,6 +248,7 @@ void uci_loop()
             printf("option name NodeTM type check default true\n");
             printf("option name SingularExt type check default true\n");
             printf("option name CorrHist type check default false\n");
+            printf("option name ProbCut type check default true\n");
             // SPSA-tunable search parameters (spin). Defaults = current hand-set values.
             printf("option name RFPMargin type spin default 30 min 20 max 200\n");
             printf("option name RazorBase type spin default 300 min 100 max 600\n");
@@ -259,6 +260,7 @@ void uci_loop()
             printf("option name HistReductionDiv type spin default 3500 min 500 max 8000\n");
             printf("option name AspInitDelta type spin default 25 min 8 max 60\n");
             printf("option name AspGrow type spin default 100 min 30 max 200\n");
+            printf("option name ProbCutMargin type spin default 180 min 60 max 400\n");
             printf("option name SyzygyPath type string default <empty>\n");
             printf("uciok\n");
             fflush(stdout);
@@ -417,6 +419,13 @@ void uci_loop()
         {
             const char* v = input + 30;
             set_corr_hist(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
+        }
+
+        // "setoption name ProbCut value <true|false>" (A/B ProbCut pruning)
+        else if (strncmp(input, "setoption name ProbCut value ", 29) == 0)
+        {
+            const char* v = input + 29;
+            set_probcut(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
         }
 
         // UCI command: "setoption name SyzygyPath value <dir[;dir...]>"
