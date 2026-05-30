@@ -83,6 +83,16 @@ void set_eval_cache(bool v) { g_eval_cache = v; }
 static bool g_improving = true;
 void set_improving(bool v) { g_improving = v; }
 
+// Node-based time management on/off (UCI option "NodeTM"). Default on; off
+// reproduces the pure best-move-stability time logic for a clean A/B.
+static bool g_node_tm = true;
+void set_node_tm(bool v) { g_node_tm = v; }
+
+// Advanced singular extensions on/off (UCI option "SingularExt"). Default on; off
+// reproduces the plain single-ply singular extension for a clean A/B.
+static bool g_singular_ext = true;
+void set_singular_ext(bool v) { g_singular_ext = v; }
+
 // ---- Self-play data logging (Phase 1: policy-net training dataset) ----------
 // When enabled, each completed root search appends one TSV record:
 //   <FEN> \t <bestmove-uci> \t <score-cp (side-to-move relative)> \t <depth>
@@ -1346,6 +1356,11 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
     int best_score = -infinity;
     int hash_flag = hash_flag_alpha;
     int legal_moves = 0;
+
+    // Node-based time management: at the root, track how many nodes the best move
+    // costs. Reset per iteration; updated when a move becomes the new best.
+    const bool is_root_node = (td.ply == 0);
+    if (is_root_node) td.root_bestmove_nodes = 0;
     int moves_searched = 0;
     int quiets_searched = 0;
 
@@ -1422,6 +1437,9 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
         // much better than every alternative. Re-search this position EXCLUDING
         // the TT move at reduced depth with a window just below tt_score; if all
         // other moves fail low, the TT move is "singular" and gets +1 ply.
+        // SINGULAR_DOUBLE_MARGIN: how far below singular_beta the alternatives must
+        // fall for a DOUBLE extension (bigger = rarer/safer). Tunable knob.
+        constexpr int SINGULAR_DOUBLE_MARGIN = 48;
         int extension = 0;
         if (excluded_move == 0 && move == tt_move && depth >= 8 && td.ply &&
             tt_hit && tt_depth >= depth - 3 && tt_flag != hash_flag_alpha &&
@@ -1429,7 +1447,20 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
             int singular_beta = tt_score - 2 * depth;
             int singular_depth = (depth - 1) / 2;
             int s = td_negamax_abdada(td, singular_beta - 1, singular_beta, singular_depth, is_cut_node, tt_move);
-            if (s < singular_beta) extension = 1;
+            if (s < singular_beta) {
+                extension = 1;
+                // Double extension: the TT move beats every alternative by a wide
+                // margin (hyper-forced) -> extend 2 plies. Non-PV only, to bound the
+                // search blow-up that uncapped double extensions can cause.
+                if (g_singular_ext && !pv_node && s < singular_beta - SINGULAR_DOUBLE_MARGIN)
+                    extension = 2;
+            }
+            // Negative extension: the TT move is NOT singular and its score already
+            // fails high -> several moves are good (multi-cut-like), so the line is
+            // less forcing. Search the TT move one ply shallower.
+            else if (g_singular_ext && tt_score >= beta) {
+                extension = -1;
+            }
         }
 
         UndoInfo undo;
@@ -1474,6 +1505,7 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
         }
 
         // PVS + LMR
+        U64 root_nodes_before = is_root_node ? td.nodes : 0;
         if (moves_searched == 0) {
             score = -td_negamax_abdada(td, -beta, -alpha, depth - 1 + extension, false);
         }
@@ -1554,6 +1586,8 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
         if (score > best_score) {
             best_score = score;
             best_move = move;
+            // Node-based TM: record how many nodes this (new best) root move cost.
+            if (is_root_node) td.root_bestmove_nodes = td.nodes - root_nodes_before;
 
             if (score > alpha) {
                 alpha = score;
@@ -1811,8 +1845,11 @@ static void thread_search(int thread_id, int max_depth) {
         }
 
         int score;
+        U64 iter_nodes = 0;
         while (true) {
+            U64 nodes_before_call = td.nodes;
             score = td_negamax_abdada(td, alpha, beta, current_depth, false);
+            iter_nodes = td.nodes - nodes_before_call;   // nodes of the last (in-window) search
             if (stop_threads.load(std::memory_order_relaxed)) break;
 
             if (score <= alpha) {            // fail low: lower alpha, pull beta toward midpoint
@@ -1848,9 +1885,27 @@ static void thread_search(int thread_id, int max_depth) {
         // iteration. If the best move is unstable (just changed), allow more
         // time, up to the hard cap (stoptime).
         if (thread_id == 0 && timeset) {
-            int soft = soft_time_limit;
+            int soft = soft_time_limit;                    // absolute timestamp (starttime + optimum)
             if (current_depth > start_depth && td.best_move != prev_best_move)
                 soft += (stoptime - soft_time_limit) / 2;
+
+            // Node-based time management. IMPORTANT: soft is an ABSOLUTE timestamp,
+            // so we must scale the DURATION (soft - starttime), never the timestamp
+            // itself. REDUCE-ONLY (scale <= 1.0): if the best move dominates the
+            // node count we're confident -> stop sooner. We never inflate the
+            // duration (that would push soft past stoptime -> burn the whole clock).
+            if (g_node_tm && current_depth >= 6 && iter_nodes > 0) {
+                double frac = (double)td.root_bestmove_nodes / (double)iter_nodes;
+                if (frac > 1.0) frac = 1.0;
+                double scale = 1.4 - frac;                 // frac>=0.4 -> <1.0 (reduce); else capped
+                if (scale > 1.0) scale = 1.0;
+                if (scale < 0.6) scale = 0.6;
+                int dur = soft - starttime;                // current optimum duration (ms)
+                if (dur < 0) dur = 0;
+                soft = starttime + (int)(dur * scale);
+            }
+            if (soft > stoptime) soft = stoptime;          // never exceed the hard cap
+
             prev_best_move = td.best_move;
             if (get_time_ms() >= soft) {
                 stop_threads.store(true, std::memory_order_relaxed);

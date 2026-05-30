@@ -11,14 +11,14 @@ Ultimo aggiornamento: 2026-05-30
 
 ## 1. Stato attuale
 
-- **Versione:** Triumviratus 3.3 (MSBuild Release|x64, MSVC v143, AVX2).
-- **Forza stimata:** ~3430–3450 Elo (Experimental, dai tornei di ancoraggio vs
-  pawn 3504 / patricia 3468 / prune 3524; prune è un outlier che alza la stima).
+- **Versione:** Triumviratus 3.3.2 (MSBuild Release|x64, MSVC v143, AVX2).
+- **Forza stimata:** ~3450–3470 Elo (3.3.1 era ~3430-3450; +~18 da improving, +~34 da
+  singular-ext rispetto alla 3.3.1; node-TM ~0). Stima grossolana, da ri-ancorare.
 - **Eval:** NNUE ibrida (feature transformer + affine), incrementale + dual-net lazy.
 - **Ricerca:** alpha-beta PVS, ABDADA SMP (shared TT + busy-bit + depth-staggering),
-  Syzygy (Fathom).
-- **Toggle UCI diagnostici/A-B:** `EvalCache` (def on), `Improving` (def on),
-  `UsePolicy` (def off), `EvalOff` (solo profiling).
+  improving heuristic, singular ext avanzate (double/negative), node-based TM, Syzygy.
+- **Toggle UCI diagnostici/A-B:** `EvalCache` (on), `Improving` (on), `NodeTM` (on),
+  `SingularExt` (on), `UsePolicy` (off), `EvalOff` (profiling).
 
 ### Note di profiling (riferimento)
 - Eval NNUE = ~60% del tempo/nodo. eval-OFF ≈ 2.3M nps, eval-ON ≈ 0.9M nps (1 thread).
@@ -34,6 +34,8 @@ Ultimo aggiornamento: 2026-05-30
 |------|----------|------|-------|
 | 2026-05 | **Static-eval cache** per-thread (memoizzazione eval, key=hash^fifty) | velocità | **+3% NPS**, sicuro (gioco identico). Tenuto, def on (`EvalCache`). |
 | 2026-05 | **Improving heuristic** (RFP/futility/LMR modulati dal trend eval) | ricerca | **Positiva confermata** (LOS 98%) @3+0.1, 508 partite. Stima centrale +17.8 ma con IC95% ampio ≈ [+1, +35] → la *grandezza* è ancora rumorosa (~+10/+18 realistico). Da rifinire con più partite + conferma a 8+0.08. Toggle `Improving`. |
+| 2026-05 | **Node-Based Time Management** (`NodeTM`) | tempo | **Neutra** (~+3 ±14, LOS 64%). Non dannosa, reduce-only. Tenuta on. NB: prima versione aveva un bug grave (scalava il timestamp assoluto invece della durata → perdeva a tempo / depth-6); risolto scalando `soft - starttime`. |
+| 2026-05 (v3.3.2) | **Singular Extensions avanzate** (Double +2 / Negative −1) (`SingularExt`) | ricerca | **+34.1 ±23.9 Elo, LOS 99.7%** @3+0.1, 235 partite (sopra node-TM). Lower bound +10 → successo netto. Il lever più grosso finora. |
 | 2026-05 | Syzygy tablebases (Fathom, WDL+DTZ) | correttezza | Finali corretti. |
 
 ### Vicoli ciechi (NON riprovare)
@@ -54,11 +56,11 @@ Legenda:
 
 | # | Voce | Elo | Diff | F | Note |
 |---|------|-----|------|---|------|
-| 1 | **Improving su LMP + null-move** | +2..8 | ★ | 1 | Infra già pronta (toggle `Improving`), valore già calcolato. Prossimo passo naturale. |
-| 2 | **Node-Based Time Management** | +5..15 | ★ | 1 | Fermarsi quando la bestmove consuma gran parte dei nodi dell'iterazione. Alto rapporto. |
+| 1 | **Improving su LMP + null-move** | +2..8 | ★ | 1 | RIMANDATA: implementata poi tolta (troppo piccola da isolare). Da riprovare singola. |
+| 2 | ~~Node-Based Time Management~~ | +5..15 | ★ | 1 | **FATTO** (v3.3.2), neutra ~+3. Toggle `NodeTM`. |
 | 3 | **Aspiration window tuning** | +2..8 | ★ | 1 | Larghezza iniziale + crescita. Solo costanti da SPRT. |
 | 4 | **SPSA tuning dei margini** (RFP/futility/razor/LMR) | +5..15 | ★★ | 1 | Setup iniziale, poi sforna Elo "gratis" su parametri esistenti. Abilita tutto il resto. |
-| 5 | **Singular Extensions avanzate** (Double + Negative) | +10..20 | ★★ | 1 | Il singolo lever di forza più grande. Base già presente. Chiave anti-tattica. |
+| 5 | ~~Singular Extensions avanzate~~ (Double + Negative) | +10..20 | ★★ | 1 | **FATTO** (v3.3.2): +34 Elo, LOS 99.7%. Toggle `SingularExt`. |
 | 6 | **Correction History** | +10..20 | ★★ | 1 | Corregge le strutture che la rete sovra/sotto-stima sistematicamente. Alto impatto. |
 | 7 | **ProbCut** | +5..12 | ★★ | 1 | Taglio con ricerca shallow sopra beta + margine. Classico +Elo AB. |
 | 8 | **History gravity/aging + continuation nel pruning** | +5..15 | ★★ | 1 | Raffina riduzioni/potature con storia 1-2 ply. |

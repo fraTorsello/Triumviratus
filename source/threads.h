@@ -68,6 +68,11 @@ struct ThreadData {
     int best_score;
     int depth;
 
+    // Node-based time management: nodes spent on the current best root move in
+    // the last completed iteration. Compared to the iteration's total nodes to
+    // gauge confidence (best move dominating nodes => stop sooner).
+    U64 root_bestmove_nodes = 0;
+
     // Opaque per-thread handle for the incremental NNUE mirror (see sf_bridge).
     // Owned here: created in init_threads, destroyed on re-init / shutdown.
     void* sfpos = nullptr;
@@ -135,5 +140,13 @@ extern void set_eval_cache(bool enabled);
 // "Improving" heuristic on/off (UCI option "Improving") — A/B the eval-trend
 // based pruning/reduction. Default on.
 extern void set_improving(bool enabled);
+
+// Node-based time management on/off (UCI option "NodeTM") — scale the optimum
+// time DOWN when the best root move dominates the node count. Default on.
+extern void set_node_tm(bool enabled);
+
+// Advanced singular extensions on/off (UCI option "SingularExt") — double (+2)
+// and negative (-1) extensions on top of the base singular extension. Default on.
+extern void set_singular_ext(bool enabled);
 
 #endif

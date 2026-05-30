@@ -245,6 +245,8 @@ void uci_loop()
             printf("option name EvalOff type check default false\n");
             printf("option name EvalCache type check default true\n");
             printf("option name Improving type check default true\n");
+            printf("option name NodeTM type check default true\n");
+            printf("option name SingularExt type check default true\n");
             printf("option name SyzygyPath type string default <empty>\n");
             printf("uciok\n");
             fflush(stdout);
@@ -382,6 +384,20 @@ void uci_loop()
         {
             const char* v = input + 31;
             set_improving(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
+        }
+
+        // "setoption name NodeTM value <true|false>" (A/B node-based time mgmt)
+        else if (strncmp(input, "setoption name NodeTM value ", 28) == 0)
+        {
+            const char* v = input + 28;
+            set_node_tm(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
+        }
+
+        // "setoption name SingularExt value <true|false>" (A/B double/negative ext)
+        else if (strncmp(input, "setoption name SingularExt value ", 33) == 0)
+        {
+            const char* v = input + 33;
+            set_singular_ext(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
         }
 
         // UCI command: "setoption name SyzygyPath value <dir[;dir...]>"
