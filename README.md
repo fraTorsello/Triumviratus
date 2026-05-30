@@ -1,22 +1,28 @@
 # Triumviratus Chess Engine
 
 Triumviratus is a strong, UCI-compliant chess engine written in C++.
-Version 3.3 builds on the stable hybrid architecture, combining classical alpha-beta search enhancements with NNUE evaluation and an experimental policy network, and adds **Syzygy endgame tablebase** support for perfect endgame play.
+Version 3.3.4 builds on the stable hybrid architecture, combining classical alpha-beta search enhancements with NNUE evaluation and an experimental policy network, and adds **Syzygy endgame tablebase** support for perfect endgame play.
 
-Currently, Triumviratus 3.3 Hybrid plays at an estimated strength of **~3450+ Elo** (CCRL scale), having demonstrated balanced performance against established engines in its rating bracket.
+Currently, Triumviratus 3.3.4 Hybrid plays at an estimated strength of **~3420 Elo (1-CPU, CCRL 40/15 scale)**, measured via a gauntlet against established CCRL-rated engines (Devre 6.0, Eleanor 4.1, Prune 3.2.1, pawn 4.0, Willow 4.0).
 
-## What's New in 3.3
+## What's New in the 3.3.x series
 
-* **Syzygy Tablebases:** In-search WDL probing (never misjudges a covered endgame) plus a root DTZ probe (converts wins / holds draws with perfect technique). Tables up to 5 men are supported via [Fathom](https://github.com/jdart1/Fathom).
-* **Robustness:** Fixed an access violation that could occur on illegal/king-capture positions parsed from FEN; the search now guards against searching positions where the side-not-to-move is in check.
-* **Search tuning:** History-based LMR reverted to the conservative ±1-ply clamp after match testing.
+Each change below was validated in isolation with an SPRT match (search changes) or an interleaved A/B NPS test (speed changes); nothing is merged on feel.
+
+* **ProbCut (3.3.4):** Capture-gated forward pruning — when a reduced-depth verification search above `beta + ProbCutMargin` fails high, the node is pruned. ~+6 Elo. Toggle `ProbCut` (default on), margin `ProbCutMargin`.
+* **SPSA-tuned margins (3.3.3):** RFP / razoring / futility / singular-double margins tuned with an in-house SPSA driver over fastchess. **+18.8 Elo** (LOS 99.2%).
+* **Advanced Singular Extensions (3.3.2):** Double (+2) and negative (−1) extensions on top of the base singular extension. **+34 Elo** (LOS 99.7%) — the single biggest search gain. Toggle `SingularExt`.
+* **Improving heuristic (3.3.1):** Static-eval trend modulates RFP / futility / LMR. ~+18 Elo. Toggle `Improving`.
+* **Static-eval cache & node-based time management:** per-thread eval memoization (+3% NPS, bit-identical search; `EvalCache`) and node-share time scaling (`NodeTM`).
+* **Syzygy Tablebases:** In-search WDL probing plus a root DTZ probe, up to 5 men via [Fathom](https://github.com/jdart1/Fathom).
+* **Robustness:** Guard against searching illegal/king-capture positions parsed from FEN.
 
 ## Features
 
 * **Protocol:** Fully UCI compliant.
 * **Board Representation:** 64-bit Bitboards.
-* **Search:** Principal Variation Search (PVS), Iterative Deepening, Aspiration Windows.
-* **Pruning & Reductions:** Null Move Pruning (NMP), Late Move Reductions (LMR), Reverse Futility / Futility Pruning, Razoring, Late Move Pruning (LMP), SEE pruning, History & Continuation-History Heuristics.
+* **Search:** Principal Variation Search (PVS), Iterative Deepening, Aspiration Windows, advanced Singular Extensions (double/negative), Improving heuristic.
+* **Pruning & Reductions:** Null Move Pruning (NMP), Late Move Reductions (LMR), Reverse Futility / Futility Pruning, Razoring, **ProbCut**, Late Move Pruning (LMP), SEE pruning, History & Continuation-History Heuristics. Key margins are SPSA-tuned and exposed as UCI spin options.
 * **Parallel Search:** ABDADA-style multi-threaded.
 * **Evaluation:** NNUE (HalfKAv2_hm architecture) with dual nets (big/small) for highly accurate static evaluation.
 * **Endgames:** Syzygy tablebase probing (WDL in search, DTZ at the root).
