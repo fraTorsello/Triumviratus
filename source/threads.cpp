@@ -99,6 +99,36 @@ void set_singular_ext(bool v) { g_singular_ext = v; }
 static bool g_corr_hist = false;
 void set_corr_hist(bool v) { g_corr_hist = v; }
 
+// ---- SPSA-tunable search parameters -----------------------------------------
+// Exposed as UCI spin options (see set_search_param + uci_mt.cpp) so an external
+// SPSA tuner (fastchess) can set them per-game without recompiling. Defaults =
+// the current hand-set values. After a tuning run, bake the converged values in.
+int g_rfp_margin       = 30;    // reverse futility: static_eval - g*depth >= beta   [SPSA-tuned]
+int g_razor_base       = 300;   // razoring: base + mult*depth below alpha -> qsearch
+int g_razor_mult       = 102;   // [SPSA-tuned]
+int g_fut_base         = 82;    // futility: base + mult*depth (+improving bonus)      [SPSA-tuned]
+int g_fut_mult         = 66;    // [SPSA-tuned]
+int g_fut_improving    = 60;    // extra futility margin when improving
+int g_singular_dmargin = 63;    // double-extension margin below singular_beta         [SPSA-tuned]
+int g_hist_red_div     = 3500;  // LMR history-reduction divisor
+int g_asp_init_delta   = 25;    // aspiration: initial window half-width
+int g_asp_grow         = 100;   // aspiration: growth % on fail (delta += delta*g/100; 100=double)
+
+// Dispatch a UCI spin option to the matching tunable. Returns true if matched.
+bool set_search_param(const char* name, int value) {
+    if (!strcmp(name, "RFPMargin"))           { g_rfp_margin       = value; return true; }
+    if (!strcmp(name, "RazorBase"))           { g_razor_base       = value; return true; }
+    if (!strcmp(name, "RazorMult"))           { g_razor_mult       = value; return true; }
+    if (!strcmp(name, "FutilityBase"))        { g_fut_base         = value; return true; }
+    if (!strcmp(name, "FutilityMult"))        { g_fut_mult         = value; return true; }
+    if (!strcmp(name, "FutilityImproving"))   { g_fut_improving    = value; return true; }
+    if (!strcmp(name, "SingularDoubleMargin")){ g_singular_dmargin = value; return true; }
+    if (!strcmp(name, "HistReductionDiv"))    { g_hist_red_div     = value; return true; }
+    if (!strcmp(name, "AspInitDelta"))        { g_asp_init_delta   = value; return true; }
+    if (!strcmp(name, "AspGrow"))             { g_asp_grow         = value; return true; }
+    return false;
+}
+
 // ---- Self-play data logging (Phase 1: policy-net training dataset) ----------
 // When enabled, each completed root search appends one TSV record:
 //   <FEN> \t <bestmove-uci> \t <score-cp (side-to-move relative)> \t <depth>
@@ -1256,8 +1286,8 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
     // to hold above beta.
     if (!pv_node && !in_check && depth <= 6 && beta < mate_score) {
         int rfp_depth = depth - ((g_improving && improving) ? 1 : 0);
-        if (static_eval - 80 * rfp_depth >= beta)
-            return static_eval - 80 * rfp_depth;
+        if (static_eval - g_rfp_margin * rfp_depth >= beta)
+            return static_eval - g_rfp_margin * rfp_depth;
     }
 
     // Null move pruning (not when beta is a mate score)
@@ -1302,7 +1332,7 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
 
     // Razoring
     if (!pv_node && !in_check && depth <= 3) {
-        int razor_margin = 300 + 100 * depth;
+        int razor_margin = g_razor_base + g_razor_mult * depth;
         if (static_eval + razor_margin < alpha) {
             score = td_quiescence(td, alpha, beta);
             if (score < alpha) return score;
@@ -1477,7 +1507,7 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
         // quiets (a rising eval deserves the benefit of the doubt); when not
         // improving, the base margin prunes more.
         if (!pv_node && !in_check && depth <= 6 && is_quiet && best_score > -mate_score) {
-            int futility_margin = 100 + 80 * depth + ((g_improving && improving) ? 60 : 0);
+            int futility_margin = g_fut_base + g_fut_mult * depth + ((g_improving && improving) ? g_fut_improving : 0);
             if (static_eval + futility_margin <= alpha) {
                 quiets_searched++;
                 continue;
@@ -1498,9 +1528,8 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
         // much better than every alternative. Re-search this position EXCLUDING
         // the TT move at reduced depth with a window just below tt_score; if all
         // other moves fail low, the TT move is "singular" and gets +1 ply.
-        // SINGULAR_DOUBLE_MARGIN: how far below singular_beta the alternatives must
-        // fall for a DOUBLE extension (bigger = rarer/safer). Tunable knob.
-        constexpr int SINGULAR_DOUBLE_MARGIN = 48;
+        // g_singular_dmargin: how far below singular_beta the alternatives must
+        // fall for a DOUBLE extension (bigger = rarer/safer). SPSA-tunable.
         int extension = 0;
         if (excluded_move == 0 && move == tt_move && depth >= 8 && td.ply &&
             tt_hit && tt_depth >= depth - 3 && tt_flag != hash_flag_alpha &&
@@ -1513,7 +1542,7 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
                 // Double extension: the TT move beats every alternative by a wide
                 // margin (hyper-forced) -> extend 2 plies. Non-PV only, to bound the
                 // search blow-up that uncapped double extensions can cause.
-                if (g_singular_ext && !pv_node && s < singular_beta - SINGULAR_DOUBLE_MARGIN)
+                if (g_singular_ext && !pv_node && s < singular_beta - g_singular_dmargin)
                     extension = 2;
             }
             // Negative extension: the TT move is NOT singular and its score already
@@ -1590,7 +1619,7 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
                 // History-based reduction: search good-history quiets less and
                 // bad-history quiets more. Clamped to +/-1 ply to stay
                 // conservative; the divisor is the knob to tune in matches.
-                int hist_r = td.history_moves[get_move_piece(move)][get_move_target(move)] / 3500;
+                int hist_r = td.history_moves[get_move_piece(move)][get_move_target(move)] / g_hist_red_div;
                 if (hist_r > 1) hist_r = 1;
                 else if (hist_r < -1) hist_r = -1;
                 reduction -= hist_r;
@@ -1902,7 +1931,7 @@ static void thread_search(int thread_id, int max_depth) {
 
         // Aspiration window: start narrow around the previous score and widen
         // incrementally on failures, instead of re-searching the full window.
-        int alpha = -infinity, beta = infinity, delta = 25;
+        int alpha = -infinity, beta = infinity, delta = g_asp_init_delta;
         if (current_depth >= 4) {
             alpha = (prev_score - delta > -infinity) ? prev_score - delta : -infinity;
             beta  = (prev_score + delta <  infinity) ? prev_score + delta :  infinity;
@@ -1919,11 +1948,11 @@ static void thread_search(int thread_id, int max_depth) {
             if (score <= alpha) {            // fail low: lower alpha, pull beta toward midpoint
                 beta = (alpha + beta) / 2;
                 alpha = (score - delta > -infinity) ? score - delta : -infinity;
-                delta += delta;
+                delta += delta * g_asp_grow / 100;
             }
             else if (score >= beta) {        // fail high: raise beta
                 beta = (score + delta < infinity) ? score + delta : infinity;
-                delta += delta;
+                delta += delta * g_asp_grow / 100;
             }
             else {
                 break;                       // score is inside the window

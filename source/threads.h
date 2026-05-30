@@ -155,7 +155,11 @@ extern void set_node_tm(bool enabled);
 extern void set_singular_ext(bool enabled);
 
 // Correction history on/off (UCI option "CorrHist") — learned static-eval
-// correction bucketed by pawn structure + side. Default on.
+// correction bucketed by pawn structure + side. Default off.
 extern void set_corr_hist(bool enabled);
+
+// SPSA-tunable search parameters: set one by name (UCI spin option). Returns true
+// if the name matched a known tunable. Used by an external SPSA tuner (fastchess).
+extern bool set_search_param(const char* name, int value);
 
 #endif

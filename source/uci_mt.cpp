@@ -248,6 +248,17 @@ void uci_loop()
             printf("option name NodeTM type check default true\n");
             printf("option name SingularExt type check default true\n");
             printf("option name CorrHist type check default false\n");
+            // SPSA-tunable search parameters (spin). Defaults = current hand-set values.
+            printf("option name RFPMargin type spin default 30 min 20 max 200\n");
+            printf("option name RazorBase type spin default 300 min 100 max 600\n");
+            printf("option name RazorMult type spin default 102 min 20 max 250\n");
+            printf("option name FutilityBase type spin default 82 min 20 max 300\n");
+            printf("option name FutilityMult type spin default 66 min 20 max 200\n");
+            printf("option name FutilityImproving type spin default 60 min 0 max 200\n");
+            printf("option name SingularDoubleMargin type spin default 63 min 0 max 200\n");
+            printf("option name HistReductionDiv type spin default 3500 min 500 max 8000\n");
+            printf("option name AspInitDelta type spin default 25 min 8 max 60\n");
+            printf("option name AspGrow type spin default 100 min 30 max 200\n");
             printf("option name SyzygyPath type string default <empty>\n");
             printf("uciok\n");
             fflush(stdout);
@@ -426,6 +437,26 @@ void uci_loop()
             else
                 printf("info string Syzygy: probing disabled (no tablebases found)\n");
             fflush(stdout);
+        }
+
+        // SPSA-tunable spin options: generic "setoption name <Param> value <N>".
+        // Placed AFTER all specific setoption handlers, so it only catches the
+        // search-parameter spins; set_search_param ignores unknown names.
+        else if (strncmp(input, "setoption name ", 15) == 0)
+        {
+            const char* p = input + 15;
+            const char* vp = strstr(p, " value ");
+            if (vp)
+            {
+                char nm[64];
+                size_t nlen = (size_t)(vp - p);
+                if (nlen < sizeof(nm))
+                {
+                    memcpy(nm, p, nlen);
+                    nm[nlen] = '\0';
+                    set_search_param(nm, atoi(vp + 7));
+                }
+            }
         }
 
         // DIAGNOSTIC: "perft N" - movegen + make/unmake speed on the current
