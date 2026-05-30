@@ -93,6 +93,12 @@ void set_node_tm(bool v) { g_node_tm = v; }
 static bool g_singular_ext = true;
 void set_singular_ext(bool v) { g_singular_ext = v; }
 
+// Correction history on/off (UCI option "CorrHist"). Default OFF: the gentle
+// version measured neutral (~0 Elo, was -12 when too aggressive). Kept in the
+// code for a future SPSA-tuned retry; not active by default.
+static bool g_corr_hist = false;
+void set_corr_hist(bool v) { g_corr_hist = v; }
+
 // ---- Self-play data logging (Phase 1: policy-net training dataset) ----------
 // When enabled, each completed root search appends one TSV record:
 //   <FEN> \t <bestmove-uci> \t <score-cp (side-to-move relative)> \t <depth>
@@ -202,6 +208,7 @@ void init_threads(int thread_count) {
         // 64-bit key guards correctness), so we deliberately do NOT clear it
         // per-go — that preserves hits from transpositions across moves.
         memset(thread_data[i].eval_cache, 0, sizeof(thread_data[i].eval_cache));
+        memset(thread_data[i].corr_hist, 0, sizeof(thread_data[i].corr_hist));
     }
 }
 
@@ -1090,6 +1097,56 @@ static int td_quiescence(ThreadData& td, int alpha, int beta) {
 // ABDADA parameters
 #define ABDADA_THRESHOLD 3  // Only use ABDADA at depth >= this
 
+// ---- Correction history ----------------------------------------------------
+// Learns the systematic gap between the NNUE static eval and the value the search
+// actually returns, bucketed by PAWN STRUCTURE + side to move (the net most often
+// misjudges pawn structures). The learned offset is added to the raw static eval,
+// so pruning/ordering see a value closer to what the search will confirm.
+static constexpr int CORR_BITS  = 14;
+static constexpr int CORR_SIZE  = 1 << CORR_BITS;       // 16384 buckets
+static constexpr int CORR_MASK  = CORR_SIZE - 1;
+static constexpr int CORR_GRAIN = 256;                  // stored value is (cp * GRAIN)
+static constexpr int CORR_CAP   = 16;                   // max correction applied (cp) — gentle
+static constexpr int CORR_LIMIT = CORR_CAP * CORR_GRAIN;// clamp for the stored value
+
+// Bucket index from the pawn-only Zobrist key (white pawns P, black pawns p).
+static inline int td_corr_index(ThreadData& td) {
+    U64 k = 0;
+    U64 bb = td.bitboards[P];
+    while (bb) { int sq = get_ls1b_index(bb); k ^= piece_keys[P][sq]; pop_bit(bb, sq); }
+    bb = td.bitboards[p];
+    while (bb) { int sq = get_ls1b_index(bb); k ^= piece_keys[p][sq]; pop_bit(bb, sq); }
+    return (int)(k & CORR_MASK);
+}
+
+// Correction (cp) to add to the raw static eval for this position.
+static inline int td_corr_value(ThreadData& td, int idx) {
+    int corr = td.corr_hist[td.side][idx] / CORR_GRAIN;
+    if (corr >  CORR_CAP) corr =  CORR_CAP;
+    if (corr < -CORR_CAP) corr = -CORR_CAP;
+    return corr;
+}
+
+// Update the bucket toward (best_score - static_eval), gated by the bound type so
+// we never learn from a value that contradicts the bound direction.
+static inline void td_corr_update(ThreadData& td, int idx, int static_eval,
+                                  int best_score, int bound, int depth,
+                                  bool in_check, int best_move, int excluded_move) {
+    if (!g_corr_hist || in_check || excluded_move || best_move == 0) return;
+    if (get_move_capture(best_move) || get_move_promoted(best_move)) return;   // quiet best only
+    if (best_score >=  mate_score || best_score <= -mate_score) return;
+    if (static_eval >= mate_score || static_eval <= -mate_score) return;
+    int diff = best_score - static_eval;
+    if (bound == hash_flag_beta  && diff < 0) return;   // lower bound: only push eval up
+    if (bound == hash_flag_alpha && diff > 0) return;   // upper bound: only push eval down
+    int& cv = td.corr_hist[td.side][idx];
+    int target = diff * CORR_GRAIN;
+    int w = (depth < 16) ? depth : 16;                  // deeper search = more trust
+    cv += (target - cv) * w / 512;                      // slower learning -> less noise
+    if (cv >  CORR_LIMIT) cv =  CORR_LIMIT;
+    if (cv < -CORR_LIMIT) cv = -CORR_LIMIT;
+}
+
 int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cut_node, int excluded_move = 0) {
     td.pv_length[td.ply] = td.ply;
 
@@ -1177,7 +1234,11 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
     // riduciamo di 1 ply per ottenere a basso costo una hash move.
     if (depth >= 4 && !tt_move && !excluded_move) depth--;
 
+    // Correction history: bucket for this position (pawn structure + side). Index
+    // computed once; reused to apply the correction here and to learn at node exit.
+    const int corr_idx = td_corr_index(td);
     int static_eval = td_evaluate(td);
+    if (g_corr_hist) static_eval += td_corr_value(td, corr_idx);
     td.eval_stack[td.ply] = static_eval;
 
     // "Improving": is our static eval higher than it was two plies ago (our own
@@ -1600,6 +1661,7 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
 
                 if (score >= beta) {
                     if (!excluded_move) store_tt(td.hash_key, move, best_score, depth, hash_flag_beta, td.ply);
+                    td_corr_update(td, corr_idx, static_eval, best_score, hash_flag_beta, depth, in_check, move, excluded_move);
 
                     if (is_quiet) {
                         // Evita di clonare la stessa mossa in entrambi gli slot
@@ -1707,6 +1769,7 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
 
                 if (score >= beta) {
                     if (!excluded_move) store_tt(td.hash_key, move, best_score, depth, hash_flag_beta, td.ply);
+                    td_corr_update(td, corr_idx, static_eval, best_score, hash_flag_beta, depth, in_check, move, excluded_move);
 
                     if (is_quiet) {
                         // Evita di clonare la stessa mossa in entrambi gli slot
@@ -1759,6 +1822,7 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
         return 0;
     }
 
+    td_corr_update(td, corr_idx, static_eval, best_score, hash_flag, depth, in_check, best_move, excluded_move);
     if (!excluded_move) store_tt(td.hash_key, best_move, best_score, depth, hash_flag, td.ply);
 
     return best_score;

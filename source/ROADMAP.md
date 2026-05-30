@@ -36,6 +36,7 @@ Ultimo aggiornamento: 2026-05-30
 | 2026-05 | **Improving heuristic** (RFP/futility/LMR modulati dal trend eval) | ricerca | **Positiva confermata** (LOS 98%) @3+0.1, 508 partite. Stima centrale +17.8 ma con IC95% ampio ≈ [+1, +35] → la *grandezza* è ancora rumorosa (~+10/+18 realistico). Da rifinire con più partite + conferma a 8+0.08. Toggle `Improving`. |
 | 2026-05 | **Node-Based Time Management** (`NodeTM`) | tempo | **Neutra** (~+3 ±14, LOS 64%). Non dannosa, reduce-only. Tenuta on. NB: prima versione aveva un bug grave (scalava il timestamp assoluto invece della durata → perdeva a tempo / depth-6); risolto scalando `soft - starttime`. |
 | 2026-05 (v3.3.2) | **Singular Extensions avanzate** (Double +2 / Negative −1) (`SingularExt`) | ricerca | **+34.1 ±23.9 Elo, LOS 99.7%** @3+0.1, 235 partite (sopra node-TM). Lower bound +10 → successo netto. Il lever più grosso finora. |
+| 2026-05 | **Correction history** (pawn-key bucket, `CorrHist`) | ricerca | **Neutra** → **default OFF**. Versione aggressiva (cap 48) = −12 Elo; versione gentile (cap 16, learn /512) ≈ 0 (±17). Codice tenuto dormiente per un retry con SPSA. |
 | 2026-05 | Syzygy tablebases (Fathom, WDL+DTZ) | correttezza | Finali corretti. |
 
 ### Vicoli ciechi (NON riprovare)

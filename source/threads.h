@@ -73,6 +73,11 @@ struct ThreadData {
     // gauge confidence (best move dominating nodes => stop sooner).
     U64 root_bestmove_nodes = 0;
 
+    // Correction history: learned (search - static_eval) gap bucketed by
+    // [side][pawn-structure key]. Size MUST match CORR_SIZE (1<<14) in threads.cpp.
+    // ~128 KB/thread. Cleared in init_threads.
+    int corr_hist[2][1 << 14];
+
     // Opaque per-thread handle for the incremental NNUE mirror (see sf_bridge).
     // Owned here: created in init_threads, destroyed on re-init / shutdown.
     void* sfpos = nullptr;
@@ -148,5 +153,9 @@ extern void set_node_tm(bool enabled);
 // Advanced singular extensions on/off (UCI option "SingularExt") — double (+2)
 // and negative (-1) extensions on top of the base singular extension. Default on.
 extern void set_singular_ext(bool enabled);
+
+// Correction history on/off (UCI option "CorrHist") — learned static-eval
+// correction bucketed by pawn structure + side. Default on.
+extern void set_corr_hist(bool enabled);
 
 #endif
