@@ -48,8 +48,40 @@ static const int sf_piece_code[12] = { 1, 2, 3, 4, 5, 6, 9, 10, 11, 12, 13, 14 }
 // Policy on/off toggle (UCI option "UsePolicy"). Lets a cutechess match A/B the
 // hybrid (policy) build against pure NNUE using the SAME binary, to measure
 // whether the policy actually adds Elo over the existing move ordering.
-static bool g_use_policy = true;
+//
+// DEFAULT = false (SHIPPING): match testing concluded the policy net is NOT an
+// Elo gain in this alpha-beta engine. Verdict by configuration:
+//   * root-only ordering (the supported mode, see policy gate below): ~0 Elo
+//     (ID+TT already order the root near-optimally, so the net has no room).
+//   * root rank-based LMR (POLICY_ROOT_LMR): net-NEGATIVE -> disabled.
+//   * interior PV-node ordering (POLICY_INTERIOR, depth>=12): -85 Elo over an
+//     SPRT run (CNN per-node cost craters nps ~22%, and the 28%-top1 ranking is
+//     not more accurate than the existing TT/killer/history ordering, so it
+//     reshuffles good moves) -> disabled.
+// The root-only ordering path is kept as the best (least-harmful) supported
+// integration if anyone re-enables UsePolicy, but the net is OFF by default and
+// the engine ships as pure NNUE. This default MUST match the advertised UCI
+// "option name UsePolicy type check default false" in uci_mt.cpp.
+static bool g_use_policy = false;
 void set_use_policy(bool v) { g_use_policy = v; }
+
+// Eval-off DIAGNOSTIC toggle (UCI option "EvalOff", default false). Replaces the
+// NNUE forward in td_evaluate() with a trivial material count, so an NPS test can
+// measure how much per-node time is spent in evaluation (NNUE forward) vs the
+// rest (movegen / make-unmake / mirror / search overhead). NOT for play.
+static bool g_eval_off = false;
+void set_eval_off(bool v) { g_eval_off = v; }
+
+// Static-eval cache on/off (UCI option "EvalCache"). Default on; the toggle lets
+// us A/B the cache (off vs on) back-to-back in a single build, immune to
+// run-to-run NPS drift between separate builds.
+static bool g_eval_cache = true;
+void set_eval_cache(bool v) { g_eval_cache = v; }
+
+// "Improving" heuristic on/off (UCI option "Improving"). Default on; off
+// reproduces the exact pre-heuristic search for a clean A/B from one build.
+static bool g_improving = true;
+void set_improving(bool v) { g_improving = v; }
 
 // ---- Self-play data logging (Phase 1: policy-net training dataset) ----------
 // When enabled, each completed root search appends one TSV record:
@@ -155,6 +187,11 @@ void init_threads(int thread_count) {
         memset(thread_data[i].capture_history, 0, sizeof(thread_data[i].capture_history));
         memset(thread_data[i].pv_table, 0, sizeof(thread_data[i].pv_table));
         memset(thread_data[i].pv_length, 0, sizeof(thread_data[i].pv_length));
+        memset(thread_data[i].eval_stack, 0, sizeof(thread_data[i].eval_stack));
+        // Zero the eval cache once. Entries stay valid across searches (the
+        // 64-bit key guards correctness), so we deliberately do NOT clear it
+        // per-go — that preserves hits from transpositions across moves.
+        memset(thread_data[i].eval_cache, 0, sizeof(thread_data[i].eval_cache));
     }
 }
 
@@ -683,6 +720,15 @@ static inline void sf_root_sync(ThreadData& td) {
 }
 
 static inline int td_evaluate(ThreadData& td) {
+    // DIAGNOSTIC: skip the NNUE forward, return a cheap material eval. Used by the
+    // "EvalOff" UCI option to isolate evaluation cost in an NPS profile.
+    if (g_eval_off) {
+        static const int mat[12] = { 100,320,330,500,900,0, 100,320,330,500,900,0 };
+        int s = 0;
+        for (int p = 0; p < 6;  p++) s += mat[p] * count_bits(td.bitboards[p]);
+        for (int p = 6; p < 12; p++) s -= mat[p] * count_bits(td.bitboards[p]);
+        return (td.side == white) ? s : -s;
+    }
 #ifdef NNUE_VERIFY
     // Verification oracle: the incrementally maintained eval must EXACTLY equal
     // a full from-scratch refresh. Build with /DNNUE_VERIFY to enable.
@@ -698,6 +744,19 @@ static inline int td_evaluate(ThreadData& td) {
     }
     return inc;
 #else
+    // Static-eval cache: hash_key mixed with fifty (see threads.h EvalCacheEntry
+    // for why fifty is in the key). A hit skips the NNUE forward pass entirely;
+    // safe because sf_pos_do/undo keep the lazy accumulator's dirty chain intact
+    // whether or not we call sf_pos_eval here.
+    if (g_eval_cache) {
+        const U64 ck = td.hash_key ^ (0x9E3779B97F4A7C15ULL * (U64)(td.fifty + 1));
+        ThreadData::EvalCacheEntry& ce = td.eval_cache[ck & ThreadData::EVAL_CACHE_MASK];
+        if (ce.key == ck) return ce.eval;
+        const int v = sf_pos_eval(td.sfpos);
+        ce.key = ck;
+        ce.eval = v;
+        return v;
+    }
     // Incremental: the accumulator is updated only for the pieces that changed
     // (HalfKAv2_hm king-bucket refresh handled by Stockfish's transform()).
     return sf_pos_eval(td.sfpos);
@@ -1109,12 +1168,25 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
     if (depth >= 4 && !tt_move && !excluded_move) depth--;
 
     int static_eval = td_evaluate(td);
+    td.eval_stack[td.ply] = static_eval;
+
+    // "Improving": is our static eval higher than it was two plies ago (our own
+    // previous turn)? A rising trend means the position is going our way, so we
+    // can trust forward pruning more and reduce more when it's NOT improving.
+    // Meaningless in check (eval is noisy there) and at ply<2 (no history) ->
+    // treated as not-improving. g_improving gates the whole heuristic so that,
+    // when off, every consumer below collapses to the original search exactly.
+    bool improving = !in_check && td.ply >= 2 &&
+                     static_eval > td.eval_stack[td.ply - 2];
 
     // Reverse futility pruning (skip when beta is a mate bound: don't cut a
-    // potential mate search short based on a static evaluation).
-    if (!pv_node && !in_check && depth <= 6 && beta < mate_score &&
-        static_eval - 80 * depth >= beta) {
-        return static_eval - 80 * depth;
+    // potential mate search short based on a static evaluation). When improving,
+    // shave one ply off the margin (easier cutoff): a rising eval is more likely
+    // to hold above beta.
+    if (!pv_node && !in_check && depth <= 6 && beta < mate_score) {
+        int rfp_depth = depth - ((g_improving && improving) ? 1 : 0);
+        if (static_eval - 80 * rfp_depth >= beta)
+            return static_eval - 80 * rfp_depth;
     }
 
     // Null move pruning (not when beta is a mate score)
@@ -1190,11 +1262,38 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
     // 3. Cache per chiave Zobrist: una posizione distinta paga la forward CNN
     //    UNA sola volta, anche se rivisitata ad ogni iterazione di iterative
     //    deepening o re-search di aspiration.
-    // TEST #1: policy SOLO alla radice (ply==0), solo per l'ordinamento delle
-    // mosse. E' l'uso dove una rete di predizione-mossa ha piu' senso e costa
-    // ~zero (una forward per iterazione ID). Nessun aggiustamento LMR (vedi sotto).
-    if (g_use_policy && td.ply == 0 && quiet_count >= 3) {
-        static constexpr int PCACHE_SIZE = 1 << 8;   // 256 entry ~4MB/thread (policy root-only: bastano pochissime entry)
+    //
+    // TEST #1 (radice): policy per l'ordinamento delle mosse a ply==0. Costa
+    // ~zero (una forward per iterazione ID) ma alla radice ID+TT ordinano gia'
+    // quasi-perfettamente -> guadagno Elo ~0 (confermato da A/B).
+    //
+    // TEST #3 (INTERIOR): estendeva la policy ai nodi PV INTERNI con
+    // depth >= POLICY_MIN_DEPTH. Ipotesi: e' DENTRO l'albero (non alla radice)
+    // che l'ordinamento NON e' gia' risolto, quindi una policy avrebbe potuto
+    // generare cutoff utili. ESITO A/B (2026-05-29, SPRT): -85 Elo. Due cause:
+    //   (1) il costo della forward CNN per-nodo affossa gli nps (~-22% a
+    //       depth>=12, -80% a depth>=6 — misurato a depth fissa);
+    //   (2) il ranking 28%-top1 NON e' piu' accurato dell'ordinamento esistente
+    //       (TT-move + killers + countermove + history + SEE), quindi rimischia
+    //       mosse buone e i nodi-per-profondita' AUMENTANO.
+    // DISABILITATO: POLICY_INTERIOR=false -> resta il solo root-only ordering
+    // (modalita' neutra, ~0 Elo). Il codice e' conservato per riferimento; per
+    // riprovarlo servirebbe prima ABBATTERE il costo CNN (quantizzazione int8 /
+    // rete piu' piccola) E limitare la policy alla CODA dei quiet a history~0
+    // (dove batte il random senza sovrascrivere mosse buone). Rimettere a true
+    // per riattivare l'esperimento.
+    constexpr bool POLICY_INTERIOR  = false;  // A/B flag (provato: -85 Elo)
+    constexpr int  POLICY_MIN_DEPTH = 12;     // solo nodi PV profondi (pochi, ad alta leva)
+
+    bool policy_gate = g_use_policy && quiet_count >= 3 &&
+        ( td.ply == 0 ||
+          (POLICY_INTERIOR && pv_node && depth >= POLICY_MIN_DEPTH) );
+
+    if (policy_gate) {
+        // 1024 entry ~16MB/thread: i nodi PV interni toccano molte piu' posizioni
+        // distinte della sola radice, quindi serve piu' capienza per evitare il
+        // thrashing della cache (e ri-pagare la forward CNN inutilmente).
+        static constexpr int PCACHE_SIZE = 1 << 10;
         struct PolicyCacheEntry { U64 key; bool valid; float scores[4096]; };
         static thread_local PolicyCacheEntry pcache[PCACHE_SIZE] = {};
         PolicyCacheEntry& slot = pcache[td.hash_key & (PCACHE_SIZE - 1)];
@@ -1298,9 +1397,11 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
             if (quiets_searched >= lmp_threshold) continue;
         }
 
-        // Futility pruning
+        // Futility pruning. When improving, widen the margin so we prune fewer
+        // quiets (a rising eval deserves the benefit of the doubt); when not
+        // improving, the base margin prunes more.
         if (!pv_node && !in_check && depth <= 6 && is_quiet && best_score > -mate_score) {
-            int futility_margin = 100 + 80 * depth;
+            int futility_margin = 100 + 80 * depth + ((g_improving && improving) ? 60 : 0);
             if (static_eval + futility_margin <= alpha) {
                 quiets_searched++;
                 continue;
@@ -1389,6 +1490,9 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
                     reduction--;
                 if (static_eval + 100 < alpha) reduction++;
                 if (is_cut_node) reduction++;
+                // Reduce one extra ply when the position is NOT improving: a
+                // flat/falling eval makes late quiets less likely to be the move.
+                if (g_improving && !improving) reduction++;
 
                 // History-based reduction: search good-history quiets less and
                 // bad-history quiets more. Clamped to +/-1 ply to stay
@@ -1399,12 +1503,14 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
                 reduction -= hist_r;
 
                 // --- LMR guidata dalla policy (RANK-BASED), TEST #2 ---
-                // Le mosse quiet nel top-3 della policy vengono ridotte di meno
-                // (la rete le ritiene candidate forti); quelle nel quartile
-                // inferiore vengono ridotte di piu'. Soglie per-rango, robuste alla
-                // scala dei logit. current_policy_scores e' valido solo dove la
-                // policy e' stata interrogata (oggi: radice, ply 0).
-                if (policy_used) {
+                // DISABILITATO (2026-05-29): la root-LMR guidata dalla policy
+                // risultava net-negativa (peggiorava l'ordinamento: +14/+16% nodi
+                // per arrivare alla stessa depth in mediogioco/tattica). Ridurre
+                // alla radice una mossa che la policy giudica scarsa ma che e'
+                // buona la fa cercare troppo poco. Teniamo solo l'ordinamento da
+                // policy (TEST #1). Rimetti POLICY_ROOT_LMR a true per riattivare.
+                constexpr bool POLICY_ROOT_LMR = false;
+                if (POLICY_ROOT_LMR && policy_used) {
                     const bool wtm = (td.side == white);
                     int src = get_move_source(move), tgt = get_move_target(move);
                     int p_idx = (wtm ? (src ^ 56) : src) * 64 + (wtm ? (tgt ^ 56) : tgt);

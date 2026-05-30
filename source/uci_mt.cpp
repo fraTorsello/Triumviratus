@@ -13,6 +13,7 @@
 #include "io.h"
 #include "threads.h"
 #include "syzygy.h"
+#include "perft.h"
 #include <thread>
 #include <string.h>
 
@@ -241,6 +242,9 @@ void uci_loop()
             printf("option name DataLog type check default false\n");
             printf("option name DataFile type string default triumviratus_dataset.txt\n");
             printf("option name UsePolicy type check default false\n");
+            printf("option name EvalOff type check default false\n");
+            printf("option name EvalCache type check default true\n");
+            printf("option name Improving type check default true\n");
             printf("option name SyzygyPath type string default <empty>\n");
             printf("uciok\n");
             fflush(stdout);
@@ -359,6 +363,27 @@ void uci_loop()
             set_use_policy(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
         }
 
+        // DIAGNOSTIC: "setoption name EvalOff value <true|false>" (NPS profiling)
+        else if (strncmp(input, "setoption name EvalOff value ", 29) == 0)
+        {
+            const char* v = input + 29;
+            set_eval_off(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
+        }
+
+        // DIAGNOSTIC: "setoption name EvalCache value <true|false>" (A/B eval cache)
+        else if (strncmp(input, "setoption name EvalCache value ", 31) == 0)
+        {
+            const char* v = input + 31;
+            set_eval_cache(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
+        }
+
+        // "setoption name Improving value <true|false>" (A/B the improving heuristic)
+        else if (strncmp(input, "setoption name Improving value ", 31) == 0)
+        {
+            const char* v = input + 31;
+            set_improving(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
+        }
+
         // UCI command: "setoption name SyzygyPath value <dir[;dir...]>"
         // Loading touches global tablebase state; stop any running search first.
         else if (strncmp(input, "setoption name SyzygyPath value ", 32) == 0)
@@ -376,6 +401,17 @@ void uci_loop()
                        syzygy_max_pieces(), path);
             else
                 printf("info string Syzygy: probing disabled (no tablebases found)\n");
+            fflush(stdout);
+        }
+
+        // DIAGNOSTIC: "perft N" - movegen + make/unmake speed on the current
+        // position (no eval, no NNUE mirror). Prints Nodes + Time(ms).
+        else if (strncmp(input, "perft", 5) == 0)
+        {
+            int d = atoi(input + 5);
+            if (d < 1) d = 1;
+            nodes = 0;
+            perft_test(d);
             fflush(stdout);
         }
 

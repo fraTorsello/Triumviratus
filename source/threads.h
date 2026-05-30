@@ -57,7 +57,12 @@ struct ThreadData {
     // deepest searched node).
     int pv_length[max_ply + 8];
     int pv_table[max_ply + 8][max_ply + 8];
-    
+
+    // Static eval at each ply, for the "improving" heuristic: compare this
+    // node's static eval to our own eval two plies ago (our previous turn).
+    // A rising eval lets the search prune/reduce more aggressively.
+    int eval_stack[max_ply + 8];
+
     // Results
     int best_move;
     int best_score;
@@ -66,6 +71,21 @@ struct ThreadData {
     // Opaque per-thread handle for the incremental NNUE mirror (see sf_bridge).
     // Owned here: created in init_threads, destroyed on re-init / shutdown.
     void* sfpos = nullptr;
+
+    // Per-thread static-eval cache. Maps a position to its NNUE eval so we can
+    // skip the (expensive ~60% of node time) sf_pos_eval forward pass when the
+    // SAME position is evaluated again — aspiration / PVS re-searches and
+    // transpositions hit this a lot. Safe because the NNUE accumulator is lazy:
+    // sf_pos_do/undo keep the dirty chain regardless, so a skipped eval is just
+    // computed later by the first descendant that needs it.
+    //   Key = hash_key mixed with fifty: SF's eval is dampened by the 50-move
+    //   counter, which hash_key does NOT encode, so fifty MUST be in the key or
+    //   we'd return a stale eval for the same position at a different fifty.
+    static constexpr int EVAL_CACHE_BITS = 16;          // 65536 entries
+    static constexpr int EVAL_CACHE_SIZE = 1 << EVAL_CACHE_BITS;
+    static constexpr U64 EVAL_CACHE_MASK = EVAL_CACHE_SIZE - 1;
+    struct EvalCacheEntry { U64 key; int eval; };
+    EvalCacheEntry eval_cache[EVAL_CACHE_SIZE];          // ~1 MB / thread
 };
 
 // Global thread management
@@ -105,5 +125,15 @@ extern void set_data_log_file(const char* path);
 
 // Policy on/off (UCI option "UsePolicy") — A/B the hybrid policy vs pure NNUE.
 extern void set_use_policy(bool enabled);
+
+// Eval-off diagnostic (UCI option "EvalOff") — NPS profiling only, not for play.
+extern void set_eval_off(bool enabled);
+
+// Static-eval cache on/off (UCI option "EvalCache") — A/B the eval cache.
+extern void set_eval_cache(bool enabled);
+
+// "Improving" heuristic on/off (UCI option "Improving") — A/B the eval-trend
+// based pruning/reduction. Default on.
+extern void set_improving(bool enabled);
 
 #endif

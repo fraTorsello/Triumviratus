@@ -1,0 +1,92 @@
+# Triumviratus — Stato & Roadmap
+
+Documento unico di **stato attuale**, **storico migliorie misurate** e **roadmap**.
+Filosofia: ogni modifica è uno step isolato dietro un toggle, validato matematicamente
+(SPRT per i cambi di ricerca, A/B NPS per i cambi di velocità). Niente si committa
+"a sensazione".
+
+Ultimo aggiornamento: 2026-05-30
+
+---
+
+## 1. Stato attuale
+
+- **Versione:** Triumviratus 3.3 (MSBuild Release|x64, MSVC v143, AVX2).
+- **Forza stimata:** ~3430–3450 Elo (Experimental, dai tornei di ancoraggio vs
+  pawn 3504 / patricia 3468 / prune 3524; prune è un outlier che alza la stima).
+- **Eval:** NNUE ibrida (feature transformer + affine), incrementale + dual-net lazy.
+- **Ricerca:** alpha-beta PVS, ABDADA SMP (shared TT + busy-bit + depth-staggering),
+  Syzygy (Fathom).
+- **Toggle UCI diagnostici/A-B:** `EvalCache` (def on), `Improving` (def on),
+  `UsePolicy` (def off), `EvalOff` (solo profiling).
+
+### Note di profiling (riferimento)
+- Eval NNUE = ~60% del tempo/nodo. eval-OFF ≈ 2.3M nps, eval-ON ≈ 0.9M nps (1 thread).
+- Collo di bottiglia eval = **feature transformer/accumulatore**, non i layer affine.
+- Gap NPS ~3-4x vs Stockfish = **architetturale (rete)**, NON compilatore né movegen.
+- Scaling ABDADA (8845HS, 8c/16t): 2t 93% · 4t 91% · 8t 67% · 16t 49% (SMT).
+
+---
+
+## 2. Storico migliorie (misurate)
+
+| Data | Modifica | Tipo | Esito |
+|------|----------|------|-------|
+| 2026-05 | **Static-eval cache** per-thread (memoizzazione eval, key=hash^fifty) | velocità | **+3% NPS**, sicuro (gioco identico). Tenuto, def on (`EvalCache`). |
+| 2026-05 | **Improving heuristic** (RFP/futility/LMR modulati dal trend eval) | ricerca | **Positiva confermata** (LOS 98%) @3+0.1, 508 partite. Stima centrale +17.8 ma con IC95% ampio ≈ [+1, +35] → la *grandezza* è ancora rumorosa (~+10/+18 realistico). Da rifinire con più partite + conferma a 8+0.08. Toggle `Improving`. |
+| 2026-05 | Syzygy tablebases (Fathom, WDL+DTZ) | correttezza | Finali corretti. |
+
+### Vicoli ciechi (NON riprovare)
+- **VNNI / AVX-512** (`/arch:AVX512`): −7%. Zen4 double-pumpa il 512-bit; VNNI aiuta
+  solo i layer affine (la parte minore).
+- **clang-cl 19** (AVX2 e znver4): pareggio/leggera regressione vs MSVC. MSVC già ottimale.
+- **Policy CNN in ricerca** (root ordering / interior / root-LMR): da neutro a −85 Elo.
+  Disabilitata (`UsePolicy` off). Per riprovare servirebbe int8/rete più piccola.
+
+---
+
+## 3. Roadmap — ordinata per priorità (alto impatto + bassa difficoltà in cima)
+
+Legenda:
+- **Elo**: guadagno atteso (stima grossolana, da confermare con SPRT).
+- **Diff**: difficoltà implementazione+test. ★ = facile, ★★ = media, ★★★ = alta.
+- **F**: fase originale (1 ricerca · 2 architettura · 3 rete).
+
+| # | Voce | Elo | Diff | F | Note |
+|---|------|-----|------|---|------|
+| 1 | **Improving su LMP + null-move** | +2..8 | ★ | 1 | Infra già pronta (toggle `Improving`), valore già calcolato. Prossimo passo naturale. |
+| 2 | **Node-Based Time Management** | +5..15 | ★ | 1 | Fermarsi quando la bestmove consuma gran parte dei nodi dell'iterazione. Alto rapporto. |
+| 3 | **Aspiration window tuning** | +2..8 | ★ | 1 | Larghezza iniziale + crescita. Solo costanti da SPRT. |
+| 4 | **SPSA tuning dei margini** (RFP/futility/razor/LMR) | +5..15 | ★★ | 1 | Setup iniziale, poi sforna Elo "gratis" su parametri esistenti. Abilita tutto il resto. |
+| 5 | **Singular Extensions avanzate** (Double + Negative) | +10..20 | ★★ | 1 | Il singolo lever di forza più grande. Base già presente. Chiave anti-tattica. |
+| 6 | **Correction History** | +10..20 | ★★ | 1 | Corregge le strutture che la rete sovra/sotto-stima sistematicamente. Alto impatto. |
+| 7 | **ProbCut** | +5..12 | ★★ | 1 | Taglio con ricerca shallow sopra beta + margine. Classico +Elo AB. |
+| 8 | **History gravity/aging + continuation nel pruning** | +5..15 | ★★ | 1 | Raffina riduzioni/potature con storia 1-2 ply. |
+| 9 | **Address Sanitizer (`/fsanitize=address`)** | ~0 | ★ | 2 | Non dà Elo ma stana il crash ~1/400 della GUI. Alto valore per release/tornei. Fallo presto. |
+| 10 | **TT bucketizzata (4-way) + aging migliore** | +3..10 | ★★ | 2 | Meno collisioni/thrashing. |
+| 11 | **Static eval nella TT vera** | +0..3 | ★★ | 1 | Estende eval/improving cross-thread. Poco Elo (cache per-thread già prende il grosso). |
+| 12 | **Pulizia codice morto** (policy, unused) | 0 | ★ | 2 | Manutenibilità, non Elo. |
+| 13 | **Ottimizzazione movegen** | +NPS | ★★★ | 2 | Limare cicli. Guadagno piccolo (movegen non è il collo di bottiglia). |
+| 14 | **Lazy SMP** (rimuovere ABDADA) | +? alto core | ★★★ | 2 | Paga ad alto core count; a ≤8 core ABDADA già scala bene → misurare il guadagno reale PRIMA. Grosso refactor. |
+| 15 | **Self-play data gen** | 0 (enabler) | ★★ | 3 | Logging FEN+score. Prerequisito per la rete propria. |
+| 16 | **Quantizzazione int8 / rete più piccola** | +NPS | ★★★ | 3 | Abbatte il vero collo di bottiglia (eval ~60%). Può far rivivere la policy. |
+| 17 | **Training rete custom** (bullet/PyTorch) | −poi+ | ★★★ | 3 | Calo iniziale fisiologico, poi indipendenza totale. Progetto lungo. |
+| 18 | **Sperimentare architettura rete** (bucket/dimensione) | ±? | ★★★ | 3 | Forza vs velocità. Dopo aver consolidato il pipeline di training. |
+
+**Suggerimento di esecuzione:** punti 1→3 sono "quick win" da fare subito (facili, infra
+pronta). Poi 4 (SPSA) perché rende automatici i tuning di tutti gli altri. Poi i due grossi
+lever di forza, 5 (singular avanzate) e 6 (correction history). Il 9 (ASAN) infilalo appena
+hai un'oretta: non è Elo ma toglie il crash che imbarazza in torneo.
+
+---
+
+## 4. Metodo di test (promemoria)
+
+- **Cambi di ricerca → SPRT** in cutechess, stesso exe con toggle UCI:
+  `option.Improving=true` vs `false`. Parametri tipici `elo0=0 elo1=5 alpha=0.05 beta=0.05`.
+- **Cambi di velocità → A/B NPS** interlacciato (`eval_ab.ps1`): mediana cache/feature
+  OFF vs ON nello stesso run (immune al rumore ~10% run-to-run dei singoli go).
+- **TC:** 3+0.1 per volume veloce; **riconfermare a 8+0.08** prima di committare i
+  cambi di pruning (a TC corto possono ingannare).
+- **Anchor Elo:** ancorare i tornei a ≥3 avversari con rating noto affidabile; diffidare
+  degli outlier (es. prune sotto-performa il suo anchor).
