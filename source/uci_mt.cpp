@@ -254,6 +254,8 @@ void uci_loop()
             printf("option name TT4Way type check default false\n");
             printf("option name CorrHistMulti type check default false\n");
             printf("option name ContHistMulti type check default false\n");
+            printf("option name LazyEval type check default true\n");
+            printf("option name TimeMgmt type check default true\n");
             // SPSA-tunable search parameters (spin). Defaults = current hand-set values.
             printf("option name RFPMargin type spin default 30 min 20 max 200\n");
             printf("option name RazorBase type spin default 300 min 100 max 600\n");
@@ -473,6 +475,20 @@ void uci_loop()
         {
             const char* v = input + 35;
             set_conthist_multi(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
+        }
+
+        // "setoption name LazyEval value <true|false>" (A/B skip-eval-in-check)
+        else if (strncmp(input, "setoption name LazyEval value ", 30) == 0)
+        {
+            const char* v = input + 30;
+            set_lazy_eval(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
+        }
+
+        // "setoption name TimeMgmt value <true|false>" (A/B score-drop time extension)
+        else if (strncmp(input, "setoption name TimeMgmt value ", 30) == 0)
+        {
+            const char* v = input + 30;
+            set_time_mgmt(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
         }
 
         // UCI command: "setoption name SyzygyPath value <dir[;dir...]>"

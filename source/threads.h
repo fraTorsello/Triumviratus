@@ -193,6 +193,12 @@ extern void set_lazy_smp(bool enabled);
 // with age-aware replacement, vs the direct-mapped default. Default off.
 extern void set_tt_4way(bool enabled);
 
+// Lazy eval (UCI "LazyEval") — skip the NNUE static eval while in check. Default off.
+extern void set_lazy_eval(bool enabled);
+
+// Extra time management (UCI "TimeMgmt") — score-drop time extension. Default off.
+extern void set_time_mgmt(bool enabled);
+
 // SPSA-tunable search parameters: set one by name (UCI spin option). Returns true
 // if the name matched a known tunable. Used by an external SPSA tuner (fastchess).
 extern bool set_search_param(const char* name, int value);

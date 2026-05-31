@@ -45,6 +45,7 @@ Ultimo aggiornamento: 2026-05-30
 | 2026-05 | Syzygy tablebases (Fathom, WDL+DTZ) | correttezza | Finali corretti. |
 | 2026-05 | **CorrHist + ContHistPrune** (default on, provvisorie) | ricerca | ~+5.5 LOS ~81% @2+0.02 (NON validato, da confermare @8+0.08). Toggle `CorrHist`/`ContHistPrune`, tunabili esposti. |
 | 2026-05 | **Anti-forfeit `bestmove (none)`** | correttezza | Se la ricerca viene abortita prima di produrre una mossa (estrema pressione di tempo), ripiega sulla 1ª mossa legale invece di emettere `(none)` (= sconfitta). Mitiga il crash ~1/800 in GUI/torneo. |
+| 2026-05 | **Lazy eval + TimeMgmt** (default on, provvisorie) | velocità/tempo | LazyEval: salta l'eval NNUE in scacco (non usato lì) = NPS gratis. TimeMgmt: estende il tempo se lo score cala vs iterazione precedente. A/B combinato @1+0.01: **+8 LOS 82%** (non validato, TC con perdite a bandiera → magnitudine incerta; TimeMgmt poco attivo a questo TC). Toggle `LazyEval`/`TimeMgmt`. Da confermare @2+0.02. |
 | 2026-05 | **Lazy SMP** (toggle `LazySMP`, default on) | architettura | Rimpiazza la coordinazione ABDADA (busy-table) con thread indipendenti + TT condivisa + depth-skipping per-thread. A/B diretto **+102 Elo LOS 99.99%** @2+0.02 4-thread; ancora **4CPU 3503→3558 (~+55)**. ABDADA preservato (toggle off). |
 
 ### In sospeso — provate, non hanno reso (classificate)

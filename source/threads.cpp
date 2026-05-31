@@ -148,6 +148,20 @@ void set_lazy_smp(bool v) { g_lazy_smp = v; }
 bool g_tt_4way = false;
 void set_tt_4way(bool v) { g_tt_4way = v; }
 
+// Lazy eval on/off (UCI option "LazyEval"). Default OFF. When ON, skip the NNUE
+// static eval in nodes where the side to move is in check: there the static eval
+// is not used by any forward-pruning rule (all gated !in_check), so computing it
+// is wasted work -> a few % NPS for free.
+static bool g_lazy_eval = true;
+void set_lazy_eval(bool v) { g_lazy_eval = v; }
+
+// Extra time management on/off (UCI option "TimeMgmt"). Default OFF. When ON, the
+// main thread grants extra time when the root score DROPS vs the previous
+// completed iteration (the position may be turning against us), on top of the
+// existing best-move-instability extension.
+static bool g_time_mgmt = true;
+void set_time_mgmt(bool v) { g_time_mgmt = v; }
+
 // ---- SPSA-tunable search parameters -----------------------------------------
 // Exposed as UCI spin options (see set_search_param + uci_mt.cpp) so an external
 // SPSA tuner (fastchess) can set them per-game without recompiling. Defaults =
@@ -1396,8 +1410,15 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
     // Correction history: bucket for this position (pawn structure + side). Index
     // computed once; reused to apply the correction here and to learn at node exit.
     const int corr_idx = td_corr_index(td);
-    int static_eval = td_evaluate(td);
-    if (g_corr_hist) static_eval += td_corr_value(td, corr_idx);
+    int static_eval;
+    if (g_lazy_eval && in_check) {
+        // In check, no forward-pruning rule reads static_eval (all gated
+        // !in_check) and corr-update is skipped -> don't pay for the NNUE eval.
+        static_eval = 0;
+    } else {
+        static_eval = td_evaluate(td);
+        if (g_corr_hist) static_eval += td_corr_value(td, corr_idx);
+    }
     td.eval_stack[td.ply] = static_eval;
 
     // "Improving": is our static eval higher than it was two plies ago (our own
@@ -2157,6 +2178,7 @@ static void thread_search(int thread_id, int max_depth) {
 
     int prev_score = 0;
     int prev_best_move = 0;
+    int prev_completed_score = 0;   // last completed iteration's score (TimeMgmt drop)
 
     // Stagger starting depths for thread diversity
     int start_depth = 1 + (thread_id % 2);
@@ -2232,6 +2254,17 @@ static void thread_search(int thread_id, int max_depth) {
             if (current_depth > start_depth && td.best_move != prev_best_move)
                 soft += (stoptime - soft_time_limit) / 2;
 
+            // Score-drop time extension (TimeMgmt): a falling score vs the previous
+            // completed iteration suggests the position is turning against us ->
+            // grant extra time, scaled by the drop, capped at ~25% of the headroom.
+            if (g_time_mgmt && current_depth > start_depth) {
+                int drop = prev_completed_score - score;   // >0 = got worse
+                if (drop > 8) {
+                    int d = (drop > 200) ? 200 : drop;
+                    soft += (stoptime - soft_time_limit) * d / 800;
+                }
+            }
+
             // Node-based time management. IMPORTANT: soft is an ABSOLUTE timestamp,
             // so we must scale the DURATION (soft - starttime), never the timestamp
             // itself. REDUCE-ONLY (scale <= 1.0): if the best move dominates the
@@ -2250,6 +2283,7 @@ static void thread_search(int thread_id, int max_depth) {
             if (soft > stoptime) soft = stoptime;          // never exceed the hard cap
 
             prev_best_move = td.best_move;
+            prev_completed_score = score;
             if (get_time_ms() >= soft) {
                 stop_threads.store(true, std::memory_order_relaxed);
                 break;
