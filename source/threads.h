@@ -167,6 +167,10 @@ extern void set_probcut(bool enabled);
 // Default off (pending SPRT validation).
 extern void set_cont_hist_prune(bool enabled);
 
+// Lazy SMP on/off (UCI option "LazySMP") — replace ABDADA busy-node coordination
+// with independent TT-sharing threads + per-thread depth skipping. Default off.
+extern void set_lazy_smp(bool enabled);
+
 // SPSA-tunable search parameters: set one by name (UCI spin option). Returns true
 // if the name matched a known tunable. Used by an external SPSA tuner (fastchess).
 extern bool set_search_param(const char* name, int value);

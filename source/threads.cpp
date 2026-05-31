@@ -118,6 +118,15 @@ void set_probcut(bool v) { g_probcut = v; }
 static bool g_cont_hist_prune = true;
 void set_cont_hist_prune(bool v) { g_cont_hist_prune = v; }
 
+// Lazy SMP on/off (UCI option "LazySMP"). Default ON (ADOPTED): validated big win
+// over the old ABDADA busy-node coordination — direct A/B @2+0.02 4-thread was
+// +102 Elo (LOS 99.99%), and the 4CPU gauntlet anchor jumped 3503 -> 3558 (~+55).
+// The ABDADA deferral was wasting work; Lazy lets helper threads search fully
+// independently (shared TT only) + diversify via per-thread depth skipping (see
+// LSMP_Skip* below). Toggle off to fall back to ABDADA for an A/B.
+static bool g_lazy_smp = true;
+void set_lazy_smp(bool v) { g_lazy_smp = v; }
+
 // ---- SPSA-tunable search parameters -----------------------------------------
 // Exposed as UCI spin options (see set_search_param + uci_mt.cpp) so an external
 // SPSA tuner (fastchess) can set them per-game without recompiling. Defaults =
@@ -1695,7 +1704,7 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
 
         // *** ABDADA: Check if child node is busy ***
         // Only for non-first moves at sufficient depth
-        if (moves_searched > 0 && depth >= ABDADA_THRESHOLD && num_threads > 1) {
+        if (moves_searched > 0 && depth >= ABDADA_THRESHOLD && num_threads > 1 && !g_lazy_smp) {
             if (is_node_busy(td.hash_key)) {
                 // Defer this move - another thread is working on it
                 td_unmake_move(td, move, undo);
@@ -1707,7 +1716,7 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
         }
 
         // Mark node as busy before searching
-        if (depth >= ABDADA_THRESHOLD && num_threads > 1) {
+        if (depth >= ABDADA_THRESHOLD && num_threads > 1 && !g_lazy_smp) {
             mark_busy(td.hash_key, depth);
         }
 
@@ -1791,7 +1800,7 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
         }
 
         // Unmark busy
-        if (depth >= ABDADA_THRESHOLD && num_threads > 1) {
+        if (depth >= ABDADA_THRESHOLD && num_threads > 1 && !g_lazy_smp) {
             unmark_busy(td.hash_key);
         }
 
@@ -2033,6 +2042,12 @@ static void print_search_info(ThreadData& td, int depth, int score) {
 // ITERATIVE DEEPENING
 // ============================================================================
 
+// Lazy SMP per-thread depth-skip pattern (Stockfish-style). Helper threads skip
+// some iterations so they spend their time at different depths than the main
+// thread, filling the shared TT from varied depths instead of duplicating work.
+static const int LSMP_SkipSize[8]  = { 1, 1, 2, 2, 2, 3, 3, 3 };
+static const int LSMP_SkipPhase[8] = { 0, 1, 0, 1, 2, 0, 1, 2 };
+
 static void thread_search(int thread_id, int max_depth) {
     ThreadData& td = thread_data[thread_id];
 
@@ -2057,6 +2072,16 @@ static void thread_search(int thread_id, int max_depth) {
 
     for (int current_depth = start_depth; current_depth <= max_depth; current_depth++) {
         if (stop_threads.load(std::memory_order_relaxed)) break;
+
+        // Lazy SMP: helper threads (id > 0) skip a per-thread pattern of depths so
+        // they diversify which iterations they invest in. The main thread (id 0)
+        // never skips: it drives time management and prints the PV, so it must
+        // progress through every depth monotonically.
+        if (g_lazy_smp && thread_id > 0) {
+            int s = (thread_id - 1) % 8;
+            if (((current_depth + LSMP_SkipPhase[s]) / LSMP_SkipSize[s]) & 1)
+                continue;
+        }
 
         // Re-sync the incremental NNUE mirror to the root board (full refresh)
         // so a previously aborted iteration cannot leave the accumulator stack

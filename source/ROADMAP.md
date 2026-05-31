@@ -45,6 +45,7 @@ Ultimo aggiornamento: 2026-05-30
 | 2026-05 | Syzygy tablebases (Fathom, WDL+DTZ) | correttezza | Finali corretti. |
 | 2026-05 | **CorrHist + ContHistPrune** (default on, provvisorie) | ricerca | ~+5.5 LOS ~81% @2+0.02 (NON validato, da confermare @8+0.08). Toggle `CorrHist`/`ContHistPrune`, tunabili esposti. |
 | 2026-05 | **Anti-forfeit `bestmove (none)`** | correttezza | Se la ricerca viene abortita prima di produrre una mossa (estrema pressione di tempo), ripiega sulla 1ª mossa legale invece di emettere `(none)` (= sconfitta). Mitiga il crash ~1/800 in GUI/torneo. |
+| 2026-05 | **Lazy SMP** (toggle `LazySMP`, default on) | architettura | Rimpiazza la coordinazione ABDADA (busy-table) con thread indipendenti + TT condivisa + depth-skipping per-thread. A/B diretto **+102 Elo LOS 99.99%** @2+0.02 4-thread; ancora **4CPU 3503→3558 (~+55)**. ABDADA preservato (toggle off). |
 
 ### Vicoli ciechi (NON riprovare)
 - **VNNI / AVX-512** (`/arch:AVX512`): −7%. Zen4 double-pumpa il 512-bit; VNNI aiuta
@@ -77,7 +78,7 @@ Legenda:
 | 11 | **Static eval nella TT vera** | +0..3 | ★★ | 1 | Estende eval/improving cross-thread. Poco Elo (cache per-thread già prende il grosso). |
 | 12 | **Pulizia codice morto** (policy, unused) | 0 | ★ | 2 | Manutenibilità, non Elo. |
 | 13 | **Ottimizzazione movegen** | +NPS | ★★★ | 2 | Limare cicli. Guadagno piccolo (movegen non è il collo di bottiglia). |
-| 14 | **Lazy SMP** (rimuovere ABDADA) | +? alto core | ★★★ | 2 | Paga ad alto core count; a ≤8 core ABDADA già scala bene → misurare il guadagno reale PRIMA. Grosso refactor. |
+| 14 | ~~**Lazy SMP** (rimuovere ABDADA)~~ | +? alto core | ★★★ | 2 | **FATTO/ADOTTATO** (default on, toggle `LazySMP`): A/B diretto @2+0.02 4-thread **+102 Elo LOS 99.99%**, ancora gauntlet **4CPU 3503→3558 (~+55)**. La busy-table ABDADA sprecava lavoro. Da provare anche a 8 thread. |
 | 15 | **Self-play data gen** | 0 (enabler) | ★★ | 3 | Logging FEN+score. Prerequisito per la rete propria. |
 | 16 | **Quantizzazione int8 / rete più piccola** | +NPS | ★★★ | 3 | Abbatte il vero collo di bottiglia (eval ~60%). Può far rivivere la policy. |
 | 17 | **Training rete custom** (bullet/PyTorch) | −poi+ | ★★★ | 3 | Calo iniziale fisiologico, poi indipendenza totale. Progetto lungo. |

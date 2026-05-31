@@ -250,6 +250,7 @@ void uci_loop()
             printf("option name CorrHist type check default true\n");
             printf("option name ProbCut type check default true\n");
             printf("option name ContHistPrune type check default true\n");
+            printf("option name LazySMP type check default true\n");
             // SPSA-tunable search parameters (spin). Defaults = current hand-set values.
             printf("option name RFPMargin type spin default 30 min 20 max 200\n");
             printf("option name RazorBase type spin default 300 min 100 max 600\n");
@@ -440,6 +441,13 @@ void uci_loop()
         {
             const char* v = input + 35;
             set_cont_hist_prune(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
+        }
+
+        // "setoption name LazySMP value <true|false>" (A/B Lazy SMP vs ABDADA)
+        else if (strncmp(input, "setoption name LazySMP value ", 29) == 0)
+        {
+            const char* v = input + 29;
+            set_lazy_smp(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
         }
 
         // UCI command: "setoption name SyzygyPath value <dir[;dir...]>"
