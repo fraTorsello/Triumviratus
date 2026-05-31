@@ -52,7 +52,7 @@ To use Triumviratus in any standard chess GUI (e.g., Cute Chess, Arena, BanksiaG
 
 ## Compiling from Source
 
-For maximum performance, Triumviratus should be compiled with AVX2 optimizations enabled. The project is configured for MSBuild (Visual Studio 2022, toolset v143) and the Release|x64 configuration already enables `/O2`, AVX2, intrinsics and whole-program optimization (LTCG). The output is named `Triumviratus_3.3.exe`.
+For maximum performance, Triumviratus should be compiled with AVX2 optimizations enabled. The project is configured for MSBuild (Visual Studio 2022, toolset v143) and the Release|x64 configuration already enables `/O2`, AVX2, intrinsics and whole-program optimization (LTCG). The output is named `Triumviratus_3.4.exe`.
 
 ### Windows (MSVC)
 Using PowerShell and the MSBuild tools, navigate to the source directory and run:
@@ -65,7 +65,7 @@ Using PowerShell and the MSBuild tools, navigate to the source directory and run
   /p:Platform=x64
 ```
 
-> Note: the Visual Studio project file is still named `Triumviratus_3.0.vcxproj`; only the build output is named `Triumviratus_3.3.exe` (via `<TargetName>` in the Release|x64 configuration).
+> Note: the Visual Studio project file is still named `Triumviratus_3.0.vcxproj`; only the build output is named `Triumviratus_3.4.exe` (via `<TargetName>` in the Release|x64 configuration).
 
 ## License
 
