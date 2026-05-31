@@ -101,6 +101,13 @@ void set_singular_ext(bool v) { g_singular_ext = v; }
 static bool g_corr_hist = true;
 void set_corr_hist(bool v) { g_corr_hist = v; }
 
+// Multi-table correction history on/off (UCI option "CorrHistMulti"). Default OFF
+// reproduces the pawn-only correction. When ON, two extra correction tables keyed
+// on minor (N/B) and major (R/Q) material are summed with the pawn table before
+// clamping — the net mis-evaluates material configurations too, not just pawns.
+static bool g_corr_multi = false;
+void set_corr_multi(bool v) { g_corr_multi = v; }
+
 // ProbCut on/off (UCI option "ProbCut"). Default ON: validated +Elo (SPRT @8+0.08,
 // LOS ~83% / leaning +6, textbook technique). When on: at sufficient depth, if a
 // capture's reduced verification search beats beta+margin, the full-depth search
@@ -118,6 +125,13 @@ void set_probcut(bool v) { g_probcut = v; }
 static bool g_cont_hist_prune = true;
 void set_cont_hist_prune(bool v) { g_cont_hist_prune = v; }
 
+// Multi-ply continuation history on/off (UCI option "ContHistMulti"). Default OFF.
+// When ON, move ordering and the cutoff history updates also use the move 2 and 4
+// plies back (not just 1 ply), giving longer-range "this reply works after that
+// sequence" signal. Tables persist like the 1-ply continuation history.
+static bool g_conthist_multi = false;
+void set_conthist_multi(bool v) { g_conthist_multi = v; }
+
 // Lazy SMP on/off (UCI option "LazySMP"). Default ON (ADOPTED): validated big win
 // over the old ABDADA busy-node coordination — direct A/B @2+0.02 4-thread was
 // +102 Elo (LOS 99.99%), and the 4CPU gauntlet anchor jumped 3503 -> 3558 (~+55).
@@ -126,6 +140,13 @@ void set_cont_hist_prune(bool v) { g_cont_hist_prune = v; }
 // LSMP_Skip* below). Toggle off to fall back to ABDADA for an A/B.
 static bool g_lazy_smp = true;
 void set_lazy_smp(bool v) { g_lazy_smp = v; }
+
+// 4-way set-associative TT on/off (UCI option "TT4Way"). Default OFF reproduces
+// the direct-mapped table; defined here, declared extern in tt.h (the bucket
+// logic lives in tt.h). Matters more now that Lazy SMP has many threads hammering
+// the TT. Toggle for a clean A/B.
+bool g_tt_4way = false;
+void set_tt_4way(bool v) { g_tt_4way = v; }
 
 // ---- SPSA-tunable search parameters -----------------------------------------
 // Exposed as UCI spin options (see set_search_param + uci_mt.cpp) so an external
@@ -150,6 +171,10 @@ int g_corr_lr_div      = 512;   // learning-rate divisor (bigger = slower/steadi
 int g_conthist_red_div = 5000;  // LMR: continuation-history reduction divisor (clamped to +/-1)
 int g_histprune_margin = 1000;  // history pruning: prune late quiet if combined hist < -margin*depth
 
+// Defined in sfnnue/evaluate.cpp: the eval picks the Big or Small NNUE by whether
+// |simpleEval| exceeds this threshold. Exposed here so SPSA can tune it.
+extern int g_small_net_threshold;
+
 // Dispatch a UCI spin option to the matching tunable. Returns true if matched.
 bool set_search_param(const char* name, int value) {
     if (!strcmp(name, "RFPMargin"))           { g_rfp_margin       = value; return true; }
@@ -167,6 +192,7 @@ bool set_search_param(const char* name, int value) {
     if (!strcmp(name, "CorrLearnDiv"))        { g_corr_lr_div      = value; return true; }
     if (!strcmp(name, "ContHistDiv"))         { g_conthist_red_div = value; return true; }
     if (!strcmp(name, "HistPruneMargin"))     { g_histprune_margin = value; return true; }
+    if (!strcmp(name, "SmallNetThreshold"))   { g_small_net_threshold = value; return true; }
     return false;
 }
 
@@ -280,6 +306,8 @@ void init_threads(int thread_count) {
         // per-go — that preserves hits from transpositions across moves.
         memset(thread_data[i].eval_cache, 0, sizeof(thread_data[i].eval_cache));
         memset(thread_data[i].corr_hist, 0, sizeof(thread_data[i].corr_hist));
+        memset(thread_data[i].corr_hist_minor, 0, sizeof(thread_data[i].corr_hist_minor));
+        memset(thread_data[i].corr_hist_major, 0, sizeof(thread_data[i].corr_hist_major));
     }
 }
 
@@ -943,6 +971,18 @@ static inline int td_score_move(ThreadData& td, int move, int tt_move) {
     int h = td.history_moves[piece][target];
     if (prev)
         h += td.continuation_history[get_move_piece(prev)][get_move_target(prev)][piece][target];
+    // Longer-range continuation history: the same quiet scored in the context of
+    // the move 2 and 4 plies back. Off by default (ContHistMulti).
+    if (g_conthist_multi) {
+        if (td.ply >= 1) {
+            int p2 = td.move_stack[td.ply - 1];
+            if (p2) h += td.cont_hist_2[get_move_piece(p2)][get_move_target(p2)][piece][target];
+        }
+        if (td.ply >= 3) {
+            int p4 = td.move_stack[td.ply - 3];
+            if (p4) h += td.cont_hist_4[get_move_piece(p4)][get_move_target(p4)][piece][target];
+        }
+    }
     return h;
 }
 
@@ -1180,26 +1220,56 @@ static constexpr int CORR_GRAIN = 256;                  // stored value is (cp *
 // Max correction (cp) and stored-value clamp are now runtime tunables: g_corr_cap
 // and (g_corr_cap * CORR_GRAIN). See g_corr_cap / g_corr_lr_div above.
 
-// Bucket index from the pawn-only Zobrist key (white pawns P, black pawns p).
-static inline int td_corr_index(ThreadData& td) {
+// Bucket index from the Zobrist key of a given set of piece types.
+static inline int td_corr_index_pieces(ThreadData& td, const int* pcs, int n) {
     U64 k = 0;
-    U64 bb = td.bitboards[P];
-    while (bb) { int sq = get_ls1b_index(bb); k ^= piece_keys[P][sq]; pop_bit(bb, sq); }
-    bb = td.bitboards[p];
-    while (bb) { int sq = get_ls1b_index(bb); k ^= piece_keys[p][sq]; pop_bit(bb, sq); }
+    for (int j = 0; j < n; j++) {
+        int pc = pcs[j];
+        U64 bb = td.bitboards[pc];
+        while (bb) { int sq = get_ls1b_index(bb); k ^= piece_keys[pc][sq]; pop_bit(bb, sq); }
+    }
     return (int)(k & CORR_MASK);
 }
 
-// Correction (cp) to add to the raw static eval for this position.
+// Bucket index from the pawn-only Zobrist key (white pawns P, black pawns p).
+static inline int td_corr_index(ThreadData& td) {
+    const int pcs[2] = { P, p };
+    return td_corr_index_pieces(td, pcs, 2);
+}
+// Minor-piece (N/B) and major-piece (R/Q) keyed indices (CorrHistMulti only).
+static inline int td_corr_index_minor(ThreadData& td) {
+    const int pcs[4] = { N, B, n, b };
+    return td_corr_index_pieces(td, pcs, 4);
+}
+static inline int td_corr_index_major(ThreadData& td) {
+    const int pcs[4] = { R, Q, r, q };
+    return td_corr_index_pieces(td, pcs, 4);
+}
+
+// Correction (cp) to add to the raw static eval for this position. Sums the pawn
+// table with the minor/major material tables when CorrHistMulti is on, then clamps
+// the TOTAL correction to g_corr_cap.
 static inline int td_corr_value(ThreadData& td, int idx) {
-    int corr = td.corr_hist[td.side][idx] / CORR_GRAIN;
+    int sum = td.corr_hist[td.side][idx];
+    if (g_corr_multi) {
+        sum += td.corr_hist_minor[td.side][td_corr_index_minor(td)];
+        sum += td.corr_hist_major[td.side][td_corr_index_major(td)];
+    }
+    int corr = sum / CORR_GRAIN;
     if (corr >  g_corr_cap) corr =  g_corr_cap;
     if (corr < -g_corr_cap) corr = -g_corr_cap;
     return corr;
 }
 
-// Update the bucket toward (best_score - static_eval), gated by the bound type so
-// we never learn from a value that contradicts the bound direction.
+// One bucket's gravity update toward `target`, clamped to +/-lim.
+static inline void td_corr_bucket_update(int& cv, int target, int w, int lim) {
+    cv += (target - cv) * w / g_corr_lr_div;            // slower learning -> less noise
+    if (cv >  lim) cv =  lim;
+    else if (cv < -lim) cv = -lim;
+}
+
+// Update the bucket(s) toward (best_score - static_eval), gated by the bound type
+// so we never learn from a value that contradicts the bound direction.
 static inline void td_corr_update(ThreadData& td, int idx, int static_eval,
                                   int best_score, int bound, int depth,
                                   bool in_check, int best_move, int excluded_move) {
@@ -1210,13 +1280,30 @@ static inline void td_corr_update(ThreadData& td, int idx, int static_eval,
     int diff = best_score - static_eval;
     if (bound == hash_flag_beta  && diff < 0) return;   // lower bound: only push eval up
     if (bound == hash_flag_alpha && diff > 0) return;   // upper bound: only push eval down
-    int& cv = td.corr_hist[td.side][idx];
     int target = diff * CORR_GRAIN;
     int w = (depth < 16) ? depth : 16;                  // deeper search = more trust
-    cv += (target - cv) * w / g_corr_lr_div;            // slower learning -> less noise
     int lim = g_corr_cap * CORR_GRAIN;                  // clamp stored value to the cap
-    if (cv >  lim) cv =  lim;
-    if (cv < -lim) cv = -lim;
+    td_corr_bucket_update(td.corr_hist[td.side][idx], target, w, lim);
+    if (g_corr_multi) {
+        td_corr_bucket_update(td.corr_hist_minor[td.side][td_corr_index_minor(td)], target, w, lim);
+        td_corr_bucket_update(td.corr_hist_major[td.side][td_corr_index_major(td)], target, w, lim);
+    }
+}
+
+// Multi-ply continuation-history update: apply `bonus` to the [2-ply][move] and
+// [4-ply][move] buckets at a cutoff. No-op unless ContHistMulti is on. Must be
+// called with td.ply == the current node's ply (same context as the 1-ply update).
+static inline void td_conthist_multi_update(ThreadData& td, int move, int bonus) {
+    if (!g_conthist_multi) return;
+    int pc = get_move_piece(move), tg = get_move_target(move);
+    if (td.ply >= 1) {
+        int p2 = td.move_stack[td.ply - 1];
+        if (p2) td_update_history(td.cont_hist_2[get_move_piece(p2)][get_move_target(p2)][pc][tg], bonus);
+    }
+    if (td.ply >= 3) {
+        int p4 = td.move_stack[td.ply - 3];
+        if (p4) td_update_history(td.cont_hist_4[get_move_piece(p4)][get_move_target(p4)][pc][tg], bonus);
+    }
 }
 
 int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cut_node, int excluded_move = 0) {
@@ -1851,6 +1938,7 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
                         td_update_history(td.history_moves[get_move_piece(move)][get_move_target(move)], bonus);
                         if (prev_cm)
                             td_update_history(td.continuation_history[pcp][pct][get_move_piece(move)][get_move_target(move)], bonus);
+                        td_conthist_multi_update(td, move, bonus);
                         // malus: quiet moves tried before the cutoff get penalized
                         for (int q = 0; q < n_searched_quiets; q++) {
                             int qm = searched_quiets[q];
@@ -1858,6 +1946,7 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
                             td_update_history(td.history_moves[get_move_piece(qm)][get_move_target(qm)], -bonus);
                             if (prev_cm)
                                 td_update_history(td.continuation_history[pcp][pct][get_move_piece(qm)][get_move_target(qm)], -bonus);
+                            td_conthist_multi_update(td, qm, -bonus);
                         }
                     }
                     else if (is_capture) {
@@ -1959,6 +2048,7 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
                         td_update_history(td.history_moves[get_move_piece(move)][get_move_target(move)], bonus);
                         if (prev_cm)
                             td_update_history(td.continuation_history[pcp][pct][get_move_piece(move)][get_move_target(move)], bonus);
+                        td_conthist_multi_update(td, move, bonus);
                         // malus: quiet moves tried before the cutoff get penalized
                         for (int q = 0; q < n_searched_quiets; q++) {
                             int qm = searched_quiets[q];
@@ -1966,6 +2056,7 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
                             td_update_history(td.history_moves[get_move_piece(qm)][get_move_target(qm)], -bonus);
                             if (prev_cm)
                                 td_update_history(td.continuation_history[pcp][pct][get_move_piece(qm)][get_move_target(qm)], -bonus);
+                            td_conthist_multi_update(td, qm, -bonus);
                         }
                     }
                     else if (is_capture) {

@@ -51,6 +51,12 @@ const unsigned int         gEmbeddedNNUESmallSize    = 1;
 #endif
 
 
+// Tunable in the GLOBAL namespace (UCI spin "SmallNetThreshold", set via
+// threads.cpp set_search_param): when |simpleEval| exceeds this, Eval::evaluate
+// uses the cheaper Small net -> more NPS, slightly less accurate. Default 1050
+// (the Stockfish value for these nets). Global so threads.cpp can extern it.
+int g_small_net_threshold = 1050;
+
 namespace Stockfish {
 
 namespace Eval {
@@ -133,7 +139,7 @@ int Eval::simple_eval(const Position& pos, Color c) {
     Value Eval::evaluate(const Position& pos) {
 
         int  simpleEval = simple_eval(pos, pos.side_to_move());
-        bool smallNet   = std::abs(simpleEval) > 1050;
+        bool smallNet   = std::abs(simpleEval) > ::g_small_net_threshold;
 
         int nnueComplexity;
 

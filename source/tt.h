@@ -58,6 +58,12 @@ extern tt_entry* hash_table;
 extern U64 hash_entries;
 extern int current_age;
 
+// 4-way set-associative TT on/off (UCI option "TT4Way"). Default off reproduces
+// the original direct-mapped (1-way) table for a clean A/B. When on, each index
+// maps to a bucket of 4 consecutive entries; probe scans the bucket, store picks
+// an age-aware victim (prefer empty -> oldest -> shallowest).
+extern bool g_tt_4way;
+
 // External variables needed for compatibility functions
 extern U64 hash_key;
 extern U64 piece_keys[12][64];
@@ -106,6 +112,52 @@ inline void new_search() {
     current_age = (current_age + 1) & 0xFF;
 }
 
+// ---- Bucket addressing (1-way vs 4-way) ------------------------------------
+// Number of slots per bucket.
+inline int tt_ways() { return g_tt_4way ? 4 : 1; }
+
+// First slot index of the bucket for this key. For 4-way, there are
+// (hash_entries/4) buckets, each 4 slots wide; hash_entries is always a multiple
+// of 4 (= mb * 65536), so base + 3 stays in bounds.
+inline U64 tt_base_index(U64 key) {
+    if (g_tt_4way) {
+        U64 buckets = hash_entries >> 2;
+        if (buckets == 0) buckets = 1;
+        return (key % buckets) << 2;
+    }
+    return key % hash_entries;
+}
+
+// Return the slot in this key's bucket that currently holds this position, or
+// nullptr if the position is not present.
+inline tt_entry* tt_find(U64 key) {
+    U64 base = tt_base_index(key);
+    int ways = tt_ways();
+    for (int i = 0; i < ways; i++) {
+        tt_entry* e = &hash_table[base + i];
+        if ((e->key ^ e->data) == key) return e;
+    }
+    return nullptr;
+}
+
+// Pick the slot to overwrite when the position is not already present. Prefer an
+// empty slot; otherwise the one with the lowest "value" = depth - 2*age-distance
+// (so old and shallow entries are evicted first).
+inline tt_entry* tt_victim(U64 key) {
+    U64 base = tt_base_index(key);
+    int ways = tt_ways();
+    tt_entry* best = &hash_table[base];
+    int best_val = 1 << 30;
+    for (int i = 0; i < ways; i++) {
+        tt_entry* e = &hash_table[base + i];
+        if (e->key == 0 && e->data == 0) return e;            // empty: take it
+        int rel_age = (current_age - unpack_age(e->data)) & 0xFF;
+        int val = unpack_depth(e->data) - 2 * rel_age;
+        if (val < best_val) { best_val = val; best = e; }
+    }
+    return best;
+}
+
 /*
  * Probe TT with ABDADA support
  *
@@ -113,14 +165,9 @@ inline void new_search() {
  * Sets: tt_move, tt_score, tt_depth, tt_flag, is_busy
  */
 inline bool probe_tt(U64 hash_key, int& tt_move, int& tt_score, int& tt_depth, int& tt_flag, bool& is_busy) {
-    U64 index = hash_key % hash_entries;
-    tt_entry* entry = &hash_table[index];
+    tt_entry* entry = tt_find(hash_key);
 
-    U64 data = entry->data;
-    U64 stored_key = entry->key;
-
-    // Lockless verification: stored_key should equal hash_key XOR data
-    if ((stored_key ^ data) != hash_key) {
+    if (!entry) {
         tt_move = 0;
         tt_score = 0;
         tt_depth = 0;
@@ -130,6 +177,7 @@ inline bool probe_tt(U64 hash_key, int& tt_move, int& tt_score, int& tt_depth, i
     }
 
     // Valid entry - unpack
+    U64 data = entry->data;
     tt_move = unpack_move(data);
     tt_score = unpack_score(data);
     tt_depth = unpack_depth(data);
@@ -143,18 +191,9 @@ inline bool probe_tt(U64 hash_key, int& tt_move, int& tt_score, int& tt_depth, i
  * Quick check if node is busy (for ABDADA skip decision)
  */
 inline bool is_node_busy(U64 hash_key) {
-    U64 index = hash_key % hash_entries;
-    tt_entry* entry = &hash_table[index];
-
-    U64 data = entry->data;
-    U64 stored_key = entry->key;
-
-    // Verify it's the same position
-    if ((stored_key ^ data) != hash_key) {
-        return false;
-    }
-
-    return (unpack_busy(data) > 0);
+    tt_entry* entry = tt_find(hash_key);
+    if (!entry) return false;
+    return (unpack_busy(entry->data) > 0);
 }
 
 /*
@@ -162,14 +201,11 @@ inline bool is_node_busy(U64 hash_key) {
  * Only marks if entry doesn't exist or is from different position
  */
 inline void mark_busy(U64 hash_key, int depth) {
-    U64 index = hash_key % hash_entries;
-    tt_entry* entry = &hash_table[index];
-
-    U64 old_data = entry->data;
-    U64 stored_key = entry->key;
+    tt_entry* entry = tt_find(hash_key);
 
     // If same position exists, increment busy counter
-    if ((stored_key ^ old_data) == hash_key) {
+    if (entry) {
+        U64 old_data = entry->data;
         int old_busy = unpack_busy(old_data);
         if (old_busy < 255) {
             U64 new_data = pack_tt_data(
@@ -185,7 +221,8 @@ inline void mark_busy(U64 hash_key, int depth) {
         }
     }
     else {
-        // New position - mark as busy with no real data yet
+        // New position - claim a victim slot in the bucket and mark it busy.
+        entry = tt_victim(hash_key);
         U64 new_data = pack_tt_data(0, 0, 0, hash_flag_alpha, 1, current_age);
         entry->data = new_data;
         entry->key = hash_key ^ new_data;
@@ -196,14 +233,11 @@ inline void mark_busy(U64 hash_key, int depth) {
  * Unmark node as busy (called when done searching a node)
  */
 inline void unmark_busy(U64 hash_key) {
-    U64 index = hash_key % hash_entries;
-    tt_entry* entry = &hash_table[index];
-
-    U64 old_data = entry->data;
-    U64 stored_key = entry->key;
+    tt_entry* entry = tt_find(hash_key);
 
     // Verify same position
-    if ((stored_key ^ old_data) == hash_key) {
+    if (entry) {
+        U64 old_data = entry->data;
         int old_busy = unpack_busy(old_data);
         if (old_busy > 0) {
             U64 new_data = pack_tt_data(
@@ -236,19 +270,11 @@ inline void store_tt(U64 hash_key, int move, int score, int depth, int flag, int
     if (score > mate_score) score += ply;
     else if (score < -mate_score) score -= ply;
 
-    U64 index = hash_key % hash_entries;
-    tt_entry* entry = &hash_table[index];
-
-    U64 old_data = entry->data;
-    U64 stored_key = entry->key;
-
     int old_busy = 0;
-    bool same_position = ((stored_key ^ old_data) == hash_key);
+    tt_entry* entry = tt_find(hash_key);     // same-position slot in the bucket?
 
-    // Decide whether to replace
-    bool should_replace = true;
-
-    if (same_position) {
+    if (entry) {
+        U64 old_data = entry->data;
         int old_depth = unpack_depth(old_data);
         int old_age = unpack_age(old_data);
         old_busy = unpack_busy(old_data);
@@ -272,6 +298,10 @@ inline void store_tt(U64 hash_key, int move, int score, int depth, int flag, int
             return;
         }
     }
+    else {
+        // Not present: evict an age-aware victim from the bucket.
+        entry = tt_victim(hash_key);
+    }
 
     // Store new entry
     U64 new_data = pack_tt_data(move, score, depth, flag, old_busy, current_age);
@@ -283,15 +313,8 @@ inline void store_tt(U64 hash_key, int move, int score, int depth, int flag, int
  * Get TT move only (for move ordering)
  */
 inline int get_tt_move(U64 hash_key) {
-    U64 index = hash_key % hash_entries;
-    tt_entry* entry = &hash_table[index];
-
-    U64 data = entry->data;
-    U64 stored_key = entry->key;
-
-    if ((stored_key ^ data) == hash_key) {
-        return unpack_move(data);
-    }
+    tt_entry* entry = tt_find(hash_key);
+    if (entry) return unpack_move(entry->data);
     return 0;
 }
 

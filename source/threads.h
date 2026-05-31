@@ -49,6 +49,11 @@ struct ThreadData {
     // that scores a quiet move in the context of the move that led to this
     // node. int16_t keeps it ~1.1 MB/thread (values are bounded to +/-HISTORY_MAX).
     int16_t continuation_history[12][64][12][64];
+    // Extra continuation histories at 2-ply and 4-ply back (only used when
+    // ContHistMulti is on): same layout, keyed on the move 2 / 4 plies earlier.
+    // Like continuation_history, NOT reset per-search (persist across moves).
+    int16_t cont_hist_2[12][64][12][64];
+    int16_t cont_hist_4[12][64][12][64];
     // Capture history: [moving piece][to square][captured piece].
     int capture_history[12][64][12];
 
@@ -77,6 +82,11 @@ struct ThreadData {
     // [side][pawn-structure key]. Size MUST match CORR_SIZE (1<<14) in threads.cpp.
     // ~128 KB/thread. Cleared in init_threads.
     int corr_hist[2][1 << 14];
+
+    // Extra correction tables (only used when CorrHistMulti is on): keyed by
+    // [side][minor-piece key] and [side][major-piece key]. Same size as corr_hist.
+    int corr_hist_minor[2][1 << 14];
+    int corr_hist_major[2][1 << 14];
 
     // Opaque per-thread handle for the incremental NNUE mirror (see sf_bridge).
     // Owned here: created in init_threads, destroyed on re-init / shutdown.
@@ -158,6 +168,10 @@ extern void set_singular_ext(bool enabled);
 // correction bucketed by pawn structure + side. Default off.
 extern void set_corr_hist(bool enabled);
 
+// Multi-table correction history on/off (UCI option "CorrHistMulti") — adds minor
+// (N/B) and major (R/Q) material-keyed correction tables. Default off.
+extern void set_corr_multi(bool enabled);
+
 // ProbCut on/off (UCI option "ProbCut") — prune when a capture's reduced
 // verification search beats beta + ProbCutMargin. Default on (SPRT-validated +Elo).
 extern void set_probcut(bool enabled);
@@ -167,9 +181,17 @@ extern void set_probcut(bool enabled);
 // Default off (pending SPRT validation).
 extern void set_cont_hist_prune(bool enabled);
 
+// Multi-ply continuation history on/off (UCI option "ContHistMulti") — adds 2-ply
+// and 4-ply continuation histories to ordering + updates. Default off.
+extern void set_conthist_multi(bool enabled);
+
 // Lazy SMP on/off (UCI option "LazySMP") — replace ABDADA busy-node coordination
 // with independent TT-sharing threads + per-thread depth skipping. Default off.
 extern void set_lazy_smp(bool enabled);
+
+// 4-way set-associative TT on/off (UCI option "TT4Way") — bucket of 4 entries
+// with age-aware replacement, vs the direct-mapped default. Default off.
+extern void set_tt_4way(bool enabled);
 
 // SPSA-tunable search parameters: set one by name (UCI spin option). Returns true
 // if the name matched a known tunable. Used by an external SPSA tuner (fastchess).

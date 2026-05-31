@@ -251,6 +251,9 @@ void uci_loop()
             printf("option name ProbCut type check default true\n");
             printf("option name ContHistPrune type check default true\n");
             printf("option name LazySMP type check default true\n");
+            printf("option name TT4Way type check default false\n");
+            printf("option name CorrHistMulti type check default false\n");
+            printf("option name ContHistMulti type check default false\n");
             // SPSA-tunable search parameters (spin). Defaults = current hand-set values.
             printf("option name RFPMargin type spin default 30 min 20 max 200\n");
             printf("option name RazorBase type spin default 300 min 100 max 600\n");
@@ -267,6 +270,7 @@ void uci_loop()
             printf("option name CorrLearnDiv type spin default 512 min 64 max 2048\n");
             printf("option name ContHistDiv type spin default 5000 min 1000 max 12000\n");
             printf("option name HistPruneMargin type spin default 1000 min 200 max 4000\n");
+            printf("option name SmallNetThreshold type spin default 1050 min 300 max 2000\n");
             printf("option name SyzygyPath type string default <empty>\n");
             printf("uciok\n");
             fflush(stdout);
@@ -448,6 +452,27 @@ void uci_loop()
         {
             const char* v = input + 29;
             set_lazy_smp(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
+        }
+
+        // "setoption name TT4Way value <true|false>" (A/B 4-way bucketed TT)
+        else if (strncmp(input, "setoption name TT4Way value ", 28) == 0)
+        {
+            const char* v = input + 28;
+            set_tt_4way(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
+        }
+
+        // "setoption name CorrHistMulti value <true|false>" (A/B multi-table corrhist)
+        else if (strncmp(input, "setoption name CorrHistMulti value ", 35) == 0)
+        {
+            const char* v = input + 35;
+            set_corr_multi(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
+        }
+
+        // "setoption name ContHistMulti value <true|false>" (A/B 2/4-ply cont history)
+        else if (strncmp(input, "setoption name ContHistMulti value ", 35) == 0)
+        {
+            const char* v = input + 35;
+            set_conthist_multi(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
         }
 
         // UCI command: "setoption name SyzygyPath value <dir[;dir...]>"

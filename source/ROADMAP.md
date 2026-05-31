@@ -47,6 +47,29 @@ Ultimo aggiornamento: 2026-05-30
 | 2026-05 | **Anti-forfeit `bestmove (none)`** | correttezza | Se la ricerca viene abortita prima di produrre una mossa (estrema pressione di tempo), ripiega sulla 1ª mossa legale invece di emettere `(none)` (= sconfitta). Mitiga il crash ~1/800 in GUI/torneo. |
 | 2026-05 | **Lazy SMP** (toggle `LazySMP`, default on) | architettura | Rimpiazza la coordinazione ABDADA (busy-table) con thread indipendenti + TT condivisa + depth-skipping per-thread. A/B diretto **+102 Elo LOS 99.99%** @2+0.02 4-thread; ancora **4CPU 3503→3558 (~+55)**. ABDADA preservato (toggle off). |
 
+### In sospeso — provate, non hanno reso (classificate)
+Tutte dietro toggle, **default OFF**: non toccano il motore. Diviso per causa.
+
+**A) Implementazione NAIVE → potenzialmente rifacibili (ma guadagno atteso sotto il pavimento di misura):**
+- **CorrHist multi-tabella** (`CorrHistMulti`): minor (N/B) + major (R/Q) oltre alla pawn.
+  Misurato **−7.5 Elo** @2+0.02 (isolato, 550 partite). **Causa = mia implementazione naive**:
+  le 3 tabelle imparano lo stesso `diff` e vengono **sommate** → saturano il clamp ±32 troppo
+  presto → sovra-correzione. **Fix**: pesi per tabella (o media, non somma) + cap più alto.
+- **Continuation history 2/4 ply** (`ContHistMulti`): mossa a 2 e 4 ply indietro in ordering+update.
+  Misurato **−19 Elo** @2+0.02 (isolato, 450 partite). **Causa = mia implementazione naive**:
+  aggiunte a **peso pieno** come la 1-ply → il segnale lontano (più rumoroso) inquina
+  l'ordinamento. **Fix**: pesare MENO i ply lontani.
+
+**B) GENUINAMENTE piatte/negative → abbandono corretto (non era un errore):**
+- **TT 4-way + aging** (`TT4Way`): **−20 Elo** a 4 thread (la sua arena). Possibile victim/bucketing
+  subottimale, ma il valore atteso delle migliorie TT è comunque basso (+0..10). Bassa priorità.
+- **SmallNetThreshold** (soglia Big/Small net): SPSA @4+0.04 = **piatto**, ciondola attorno a 1050
+  (default Stockfish). Nessun ottimo diverso → **tenuto 1050**. Confermato: non c'è Elo da qui.
+- **Fine-pass SPSA** (HistRedDiv/AspGrow), **Aspiration window**, **NodeTM**: misurati neutri. Corretto scartarle.
+
+> Nota di metodo: anche le (A) fixate renderebbero ~+2..8 Elo, **sotto la soglia confermabile**
+> a questa forza (3558). Riprenderle = molto lavoro per Elo non misurabili. Parcheggiate apposta.
+
 ### Vicoli ciechi (NON riprovare)
 - **VNNI / AVX-512** (`/arch:AVX512`): −7%. Zen4 double-pumpa il 512-bit; VNNI aiuta
   solo i layer affine (la parte minore).
@@ -74,7 +97,7 @@ Legenda:
 | 7 | ~~ProbCut~~ | +5..12 | ★★ | 1 | **FATTO** (v3.3.4): +6.6 Elo, LOS ~84% @8+0.08. Default on (`ProbCut`), margine 180 in taratura SPSA (`ProbCutMargin`). |
 | 8 | ~~**History gravity/aging + continuation nel pruning**~~ | +5..15 | ★★ | 1 | **ADOTTATA PROVVISORIA** (default on, toggle `ContHistPrune`): continuation-history nella riduzione LMR + potatura dei quiet tardivi con storia combinata molto negativa a bassa depth. Tunabili `ContHistDiv` (def 5000), `HistPruneMargin` (def 1000). SPRT congiunto con #6 (vedi sopra). Da confermare a TC lungo. |
 | 9 | **Address Sanitizer (`/fsanitize=address`)** | ~0 | ★ | 2 | Non dà Elo ma stana il crash ~1/400 della GUI. Alto valore per release/tornei. Fallo presto. |
-| 10 | **TT bucketizzata (4-way) + aging migliore** | +3..10 | ★★ | 2 | Meno collisioni/thrashing. |
+| 10 | ~~**TT bucketizzata (4-way) + aging migliore**~~ | +3..10 | ★★ | 2 | **PROVATA = NEGATIVA**, parcheggiata. A/B diretto a **4 thread** (la sua arena): **~−20 Elo** (0.47, stabile @~100 partite), LLR fermo. Il bucket-scan + victim age-aware non compensa a questi core/dimensioni TT. Codice dietro toggle `TT4Way` (default OFF = direct-mapped originale). Da rifare semmai con entry più larga / replacement diverso. |
 | 11 | **Static eval nella TT vera** | +0..3 | ★★ | 1 | Estende eval/improving cross-thread. Poco Elo (cache per-thread già prende il grosso). |
 | 12 | **Pulizia codice morto** (policy, unused) | 0 | ★ | 2 | Manutenibilità, non Elo. |
 | 13 | **Ottimizzazione movegen** | +NPS | ★★★ | 2 | Limare cicli. Guadagno piccolo (movegen non è il collo di bottiglia). |
