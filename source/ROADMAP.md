@@ -43,6 +43,8 @@ Ultimo aggiornamento: 2026-05-30
 | 2026-05 (v3.3.3) | **SPSA coarse dei margini** (RFP 80→30, RazorMult→102, FutilityBase→82, FutilityMult→66, SingularDoubleMargin→63) | tuning | **+18.8 ±15.5 Elo, LOS 99.2%** @3+0.2. Cotto nei default. Fine-pass successivo (HistRedDiv/AspGrow) = neutro → scartato. |
 | 2026-05 (v3.3.4) | **ProbCut** (`ProbCut`, margine `ProbCutMargin` def 180) | ricerca | **+6.6 ±13.2, LOS ~84%** @8+0.08 (SPRT non chiuso ma trend + stabile su tecnica standard). Accettata default-on. Margine in taratura SPSA. |
 | 2026-05 | Syzygy tablebases (Fathom, WDL+DTZ) | correttezza | Finali corretti. |
+| 2026-05 | **CorrHist + ContHistPrune** (default on, provvisorie) | ricerca | ~+5.5 LOS ~81% @2+0.02 (NON validato, da confermare @8+0.08). Toggle `CorrHist`/`ContHistPrune`, tunabili esposti. |
+| 2026-05 | **Anti-forfeit `bestmove (none)`** | correttezza | Se la ricerca viene abortita prima di produrre una mossa (estrema pressione di tempo), ripiega sulla 1ª mossa legale invece di emettere `(none)` (= sconfitta). Mitiga il crash ~1/800 in GUI/torneo. |
 
 ### Vicoli ciechi (NON riprovare)
 - **VNNI / AVX-512** (`/arch:AVX512`): −7%. Zen4 double-pumpa il 512-bit; VNNI aiuta
@@ -67,9 +69,9 @@ Legenda:
 | 3 | ~~Aspiration window tuning~~ | +2..8 | ★ | 1 | **FATTO** (esposto AspInitDelta/AspGrow, tarato in fine-pass): **neutro** (~0), AspInitDelta piatto. Resta ai default. |
 | 4 | ~~SPSA tuning dei margini~~ (RFP/futility/razor/LMR) | +5..15 | ★★ | 1 | **FATTO** (v3.3.3): coarse +18.8 Elo cotto. Infra SPSA pronta (spsa_tune*.py) per ogni param futuro. |
 | 5 | ~~Singular Extensions avanzate~~ (Double + Negative) | +10..20 | ★★ | 1 | **FATTO** (v3.3.2): +34 Elo, LOS 99.7%. Toggle `SingularExt`. |
-| 6 | **Correction History** | +10..20 | ★★ | 1 | Corregge le strutture che la rete sovra/sotto-stima sistematicamente. Alto impatto. |
+| 6 | ~~**Correction History**~~ | +10..20 | ★★ | 1 | **ADOTTATA PROVVISORIA** (default on, toggle `CorrHist`): cap 32 / lr-div 512, tunabili `CorrCap`/`CorrLearnDiv`. SPRT congiunto con #8 @2+0.02: **~+5.5, LOS ~81% @1750 (IC tocca lo 0, NON validato)**. L'ultrabullet sotto-vende una feature depth-dipendente → adottata in via provvisoria, **da confermare a 8+0.08**. |
 | 7 | ~~ProbCut~~ | +5..12 | ★★ | 1 | **FATTO** (v3.3.4): +6.6 Elo, LOS ~84% @8+0.08. Default on (`ProbCut`), margine 180 in taratura SPSA (`ProbCutMargin`). |
-| 8 | **History gravity/aging + continuation nel pruning** | +5..15 | ★★ | 1 | Raffina riduzioni/potature con storia 1-2 ply. |
+| 8 | ~~**History gravity/aging + continuation nel pruning**~~ | +5..15 | ★★ | 1 | **ADOTTATA PROVVISORIA** (default on, toggle `ContHistPrune`): continuation-history nella riduzione LMR + potatura dei quiet tardivi con storia combinata molto negativa a bassa depth. Tunabili `ContHistDiv` (def 5000), `HistPruneMargin` (def 1000). SPRT congiunto con #6 (vedi sopra). Da confermare a TC lungo. |
 | 9 | **Address Sanitizer (`/fsanitize=address`)** | ~0 | ★ | 2 | Non dà Elo ma stana il crash ~1/400 della GUI. Alto valore per release/tornei. Fallo presto. |
 | 10 | **TT bucketizzata (4-way) + aging migliore** | +3..10 | ★★ | 2 | Meno collisioni/thrashing. |
 | 11 | **Static eval nella TT vera** | +0..3 | ★★ | 1 | Estende eval/improving cross-thread. Poco Elo (cache per-thread già prende il grosso). |

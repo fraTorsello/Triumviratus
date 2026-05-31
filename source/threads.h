@@ -162,6 +162,11 @@ extern void set_corr_hist(bool enabled);
 // verification search beats beta + ProbCutMargin. Default on (SPRT-validated +Elo).
 extern void set_probcut(bool enabled);
 
+// Continuation-history pruning/reduction on/off (UCI option "ContHistPrune") —
+// uses continuation history in the LMR reduction and to prune bad late quiets.
+// Default off (pending SPRT validation).
+extern void set_cont_hist_prune(bool enabled);
+
 // SPSA-tunable search parameters: set one by name (UCI spin option). Returns true
 // if the name matched a known tunable. Used by an external SPSA tuner (fastchess).
 extern bool set_search_param(const char* name, int value);

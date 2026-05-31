@@ -93,10 +93,12 @@ void set_node_tm(bool v) { g_node_tm = v; }
 static bool g_singular_ext = true;
 void set_singular_ext(bool v) { g_singular_ext = v; }
 
-// Correction history on/off (UCI option "CorrHist"). Default OFF: the gentle
-// version measured neutral (~0 Elo, was -12 when too aggressive). Kept in the
-// code for a future SPSA-tuned retry; not active by default.
-static bool g_corr_hist = false;
+// Correction history on/off (UCI option "CorrHist"). Default ON (PROVISIONAL):
+// the cap=32 / lr-div=512 version leaned +Elo (ultrabullet 2+0.02: ~+5.5, LOS ~81%
+// @1750 games, CI still touching 0). Ultrabullet UNDERSELLS a depth-dependent
+// correction, so adopted provisionally pending a longer-TC (8+0.08) SPRT. Toggle
+// off for a clean A/B; tunable via CorrCap / CorrLearnDiv.
+static bool g_corr_hist = true;
 void set_corr_hist(bool v) { g_corr_hist = v; }
 
 // ProbCut on/off (UCI option "ProbCut"). Default ON: validated +Elo (SPRT @8+0.08,
@@ -105,6 +107,16 @@ void set_corr_hist(bool v) { g_corr_hist = v; }
 // would almost surely fail high too, so we prune the node early.
 static bool g_probcut = true;
 void set_probcut(bool v) { g_probcut = v; }
+
+// Continuation-history pruning/reduction on/off (UCI option "ContHistPrune").
+// Default ON (PROVISIONAL): tested jointly with CorrHist (ultrabullet ~+5.5, LOS
+// ~81%); adopted provisionally pending a longer-TC SPRT. When on: (1) the LMR
+// reduction also factors in the continuation history of the move w.r.t. the
+// previous move (not just butterfly history), and (2) late quiet moves whose
+// combined (butterfly + continuation) history is strongly negative are pruned at
+// low depth. Toggle off for a clean A/B; tunable via ContHistDiv / HistPruneMargin.
+static bool g_cont_hist_prune = true;
+void set_cont_hist_prune(bool v) { g_cont_hist_prune = v; }
 
 // ---- SPSA-tunable search parameters -----------------------------------------
 // Exposed as UCI spin options (see set_search_param + uci_mt.cpp) so an external
@@ -121,6 +133,13 @@ int g_hist_red_div     = 3500;  // LMR history-reduction divisor
 int g_asp_init_delta   = 25;    // aspiration: initial window half-width
 int g_asp_grow         = 100;   // aspiration: growth % on fail (delta += delta*g/100; 100=double)
 int g_probcut_margin   = 180;   // ProbCut: capture verification must beat beta by this margin
+// Correction-history tunables (only active when CorrHist is on).
+int g_corr_cap         = 32;    // max correction applied to static eval (cp). Was a fixed 16
+                                // (measured neutral); raised + exposed for an SPSA retry.
+int g_corr_lr_div      = 512;   // learning-rate divisor (bigger = slower/steadier learning)
+// Continuation-history pruning tunables (only active when ContHistPrune is on).
+int g_conthist_red_div = 5000;  // LMR: continuation-history reduction divisor (clamped to +/-1)
+int g_histprune_margin = 1000;  // history pruning: prune late quiet if combined hist < -margin*depth
 
 // Dispatch a UCI spin option to the matching tunable. Returns true if matched.
 bool set_search_param(const char* name, int value) {
@@ -135,6 +154,10 @@ bool set_search_param(const char* name, int value) {
     if (!strcmp(name, "AspInitDelta"))        { g_asp_init_delta   = value; return true; }
     if (!strcmp(name, "AspGrow"))             { g_asp_grow         = value; return true; }
     if (!strcmp(name, "ProbCutMargin"))       { g_probcut_margin   = value; return true; }
+    if (!strcmp(name, "CorrCap"))             { g_corr_cap         = value; return true; }
+    if (!strcmp(name, "CorrLearnDiv"))        { g_corr_lr_div      = value; return true; }
+    if (!strcmp(name, "ContHistDiv"))         { g_conthist_red_div = value; return true; }
+    if (!strcmp(name, "HistPruneMargin"))     { g_histprune_margin = value; return true; }
     return false;
 }
 
@@ -1145,8 +1168,8 @@ static constexpr int CORR_BITS  = 14;
 static constexpr int CORR_SIZE  = 1 << CORR_BITS;       // 16384 buckets
 static constexpr int CORR_MASK  = CORR_SIZE - 1;
 static constexpr int CORR_GRAIN = 256;                  // stored value is (cp * GRAIN)
-static constexpr int CORR_CAP   = 16;                   // max correction applied (cp) — gentle
-static constexpr int CORR_LIMIT = CORR_CAP * CORR_GRAIN;// clamp for the stored value
+// Max correction (cp) and stored-value clamp are now runtime tunables: g_corr_cap
+// and (g_corr_cap * CORR_GRAIN). See g_corr_cap / g_corr_lr_div above.
 
 // Bucket index from the pawn-only Zobrist key (white pawns P, black pawns p).
 static inline int td_corr_index(ThreadData& td) {
@@ -1161,8 +1184,8 @@ static inline int td_corr_index(ThreadData& td) {
 // Correction (cp) to add to the raw static eval for this position.
 static inline int td_corr_value(ThreadData& td, int idx) {
     int corr = td.corr_hist[td.side][idx] / CORR_GRAIN;
-    if (corr >  CORR_CAP) corr =  CORR_CAP;
-    if (corr < -CORR_CAP) corr = -CORR_CAP;
+    if (corr >  g_corr_cap) corr =  g_corr_cap;
+    if (corr < -g_corr_cap) corr = -g_corr_cap;
     return corr;
 }
 
@@ -1181,9 +1204,10 @@ static inline void td_corr_update(ThreadData& td, int idx, int static_eval,
     int& cv = td.corr_hist[td.side][idx];
     int target = diff * CORR_GRAIN;
     int w = (depth < 16) ? depth : 16;                  // deeper search = more trust
-    cv += (target - cv) * w / 512;                      // slower learning -> less noise
-    if (cv >  CORR_LIMIT) cv =  CORR_LIMIT;
-    if (cv < -CORR_LIMIT) cv = -CORR_LIMIT;
+    cv += (target - cv) * w / g_corr_lr_div;            // slower learning -> less noise
+    int lim = g_corr_cap * CORR_GRAIN;                  // clamp stored value to the cap
+    if (cv >  lim) cv =  lim;
+    if (cv < -lim) cv = -lim;
 }
 
 int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cut_node, int excluded_move = 0) {
@@ -1599,6 +1623,24 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
             }
         }
 
+        // History pruning: a late quiet move whose combined (butterfly +
+        // continuation) history is strongly negative has repeatedly failed in this
+        // context -> skip it at low depth. Threshold scales with depth so we prune
+        // more aggressively the shallower we are. NB: td.ply not yet incremented
+        // here, so the previous move is td.move_stack[td.ply].
+        if (g_cont_hist_prune && !pv_node && !in_check && is_quiet &&
+            depth <= 4 && moves_searched > 0 && best_score > -mate_score) {
+            int prev = td.move_stack[td.ply];
+            int hh = td.history_moves[get_move_piece(move)][get_move_target(move)];
+            if (prev)
+                hh += td.continuation_history[get_move_piece(prev)][get_move_target(prev)]
+                                             [get_move_piece(move)][get_move_target(move)];
+            if (hh < -g_histprune_margin * depth) {
+                quiets_searched++;
+                continue;
+            }
+        }
+
         // Singular extension: before searching the TT move, check whether it is
         // much better than every alternative. Re-search this position EXCLUDING
         // the TT move at reduced depth with a window just below tt_score; if all
@@ -1698,6 +1740,23 @@ int td_negamax_abdada(ThreadData& td, int alpha, int beta, int depth, bool is_cu
                 if (hist_r > 1) hist_r = 1;
                 else if (hist_r < -1) hist_r = -1;
                 reduction -= hist_r;
+
+                // Continuation-history reduction: the move scored in the context of
+                // the move that led to this node. Good follow-ups are searched less,
+                // bad ones more. Separate +/-1 clamp so it stacks with the butterfly
+                // term above. NB: td.ply was already incremented for the child, so
+                // the previous move lives at td.move_stack[td.ply - 1].
+                if (g_cont_hist_prune) {
+                    int prev = td.move_stack[td.ply - 1];
+                    if (prev) {
+                        int ch = td.continuation_history[get_move_piece(prev)][get_move_target(prev)]
+                                                        [get_move_piece(move)][get_move_target(move)];
+                        int ch_r = ch / g_conthist_red_div;
+                        if (ch_r > 1) ch_r = 1;
+                        else if (ch_r < -1) ch_r = -1;
+                        reduction -= ch_r;
+                    }
+                }
 
                 // --- LMR guidata dalla policy (RANK-BASED), TEST #2 ---
                 // DISABILITATO (2026-05-29): la root-LMR guidata dalla policy
@@ -2207,6 +2266,31 @@ void search_position_mt(int depth) {
         log_search_record(best_move, best_score, best_depth);
     }
 
+    // Last-resort anti-forfeit: if the search was aborted (extreme time pressure)
+    // before thread 0 produced any move or PV, best_move is 0 and we'd emit
+    // "bestmove (none)" — an instant loss in any GUI/match. Instead, fall back to
+    // the FIRST LEGAL root move so we never forfeit. Mirrors the search's
+    // make/unmake protocol (ply + repetition stack) for legality testing.
+    if (!best_move && !thread_data[0].pv_table[0][0]) {
+        ThreadData& td0 = thread_data[0];
+        moves rescue[1];
+        td_generate_moves(td0, rescue, false);   // all pseudo-legal moves
+        for (int i = 0; i < rescue->count; i++) {
+            UndoInfo undo;
+            td0.ply++;
+            td0.repetition_table[++td0.repetition_index] = td0.hash_key;
+            if (td_make_move(td0, rescue->moves[i], undo)) {
+                td_unmake_move(td0, rescue->moves[i], undo);
+                td0.ply--;
+                td0.repetition_index--;
+                best_move = rescue->moves[i];
+                break;
+            }
+            td0.ply--;
+            td0.repetition_index--;
+        }
+    }
+
     printf("bestmove ");
     if (best_move) {
         print_move(best_move);
@@ -2215,7 +2299,7 @@ void search_position_mt(int depth) {
         print_move(thread_data[0].pv_table[0][0]);
     }
     else {
-        printf("(none)");
+        printf("(none)");   // truly no legal move (stalemate/checkmate handled earlier)
     }
     printf("\n");
     fflush(stdout);

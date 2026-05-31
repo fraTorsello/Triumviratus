@@ -247,8 +247,9 @@ void uci_loop()
             printf("option name Improving type check default true\n");
             printf("option name NodeTM type check default true\n");
             printf("option name SingularExt type check default true\n");
-            printf("option name CorrHist type check default false\n");
+            printf("option name CorrHist type check default true\n");
             printf("option name ProbCut type check default true\n");
+            printf("option name ContHistPrune type check default true\n");
             // SPSA-tunable search parameters (spin). Defaults = current hand-set values.
             printf("option name RFPMargin type spin default 30 min 20 max 200\n");
             printf("option name RazorBase type spin default 300 min 100 max 600\n");
@@ -261,6 +262,10 @@ void uci_loop()
             printf("option name AspInitDelta type spin default 25 min 8 max 60\n");
             printf("option name AspGrow type spin default 100 min 30 max 200\n");
             printf("option name ProbCutMargin type spin default 180 min 60 max 400\n");
+            printf("option name CorrCap type spin default 32 min 8 max 128\n");
+            printf("option name CorrLearnDiv type spin default 512 min 64 max 2048\n");
+            printf("option name ContHistDiv type spin default 5000 min 1000 max 12000\n");
+            printf("option name HistPruneMargin type spin default 1000 min 200 max 4000\n");
             printf("option name SyzygyPath type string default <empty>\n");
             printf("uciok\n");
             fflush(stdout);
@@ -426,6 +431,15 @@ void uci_loop()
         {
             const char* v = input + 29;
             set_probcut(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
+        }
+
+        // "setoption name ContHistPrune value <true|false>" (A/B continuation-history
+        // pruning + reduction). NB: must precede the generic spin handler; "ContHist"
+        // would otherwise be parsed as an (unknown) spin name.
+        else if (strncmp(input, "setoption name ContHistPrune value ", 35) == 0)
+        {
+            const char* v = input + 35;
+            set_cont_hist_prune(strncmp(v, "true", 4) == 0 || strncmp(v, "on", 2) == 0 || v[0] == '1');
         }
 
         // UCI command: "setoption name SyzygyPath value <dir[;dir...]>"
